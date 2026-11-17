@@ -25,6 +25,7 @@ async function View({ searchParams }: Pick<PageProps<"/sample/review">, "searchP
       testId={data.test.id}
       title={data.test.title}
       rubric={data.test.rubric}
+      track={data.track}
       basePath="/sample/review"
       scripts={data.scripts.map((s) => ({ id: s.id, status: s.status, total: s.total, max_total: s.max_total, risk: s.risk, warnings: s.warnings, name: s.student.display_name, code: s.student.anon_code }))}
       current={data.current && {

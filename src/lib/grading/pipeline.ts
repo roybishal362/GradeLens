@@ -4,7 +4,7 @@ import { runStructured, type PoolResult } from "@/lib/ai/pool";
 import { answersForGrading, graderSystem, readerSystem } from "./prompts";
 import type { Exemplar } from "./calibration";
 import { GradeSchema, ReadResultSchema, type GradeResult, type ReadAnswer, type ReadResult, type Rubric } from "./schemas";
-import { verify, verifyMcq, type Verified } from "./verifier";
+import { guardHarsh, verify, verifyMcq, type Verified } from "./verifier";
 
 export type PageInput = { data: Uint8Array; mediaType: string };
 
@@ -135,4 +135,19 @@ export async function gradeRead(read: ReadStep, rubric: Rubric, opts: GradeOptio
     attempts: [...read.attempts, ...(gradeA?.attempts ?? []), ...(gradeB?.attempts ?? [])],
     warnings,
   };
+}
+
+/**
+ * Last step before a suggestion is stored (after any learned shifts): written answers marked 0 go to the teacher
+ * (see guardHarsh), then the script's risk is the highest of its questions.
+ */
+export function finalizeOutcome(outcome: StudentOutcome, rubric: Rubric): StudentOutcome {
+  const rank = { low: 0, medium: 1, high: 2 } as const;
+  for (const q of outcome.questions) {
+    const rq = rubric.questions.find((x) => x.q === q.q);
+    guardHarsh(q, Boolean(q.answer?.text?.trim()), rq?.type === "mcq");
+  }
+  outcome.total = outcome.questions.reduce((s, x) => s + x.final, 0);
+  outcome.risk = outcome.questions.reduce<"low" | "medium" | "high">((r, x) => (rank[x.risk] > rank[r] ? x.risk : r), "low");
+  return outcome;
 }

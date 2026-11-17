@@ -1,7 +1,7 @@
 import "server-only";
 
 import { pickExemplars, questionShifts, shifted, type Exemplar } from "@/lib/grading/calibration";
-import { gradeRead, readStudent, type ReadStep, type StudentOutcome } from "@/lib/grading/pipeline";
+import { finalizeOutcome, gradeRead, readStudent, type ReadStep, type StudentOutcome } from "@/lib/grading/pipeline";
 import type { Rubric } from "@/lib/grading/schemas";
 import { adminDb } from "@/lib/supabase/clients";
 
@@ -96,6 +96,7 @@ export async function runGradingJob(submissionId: string, opts: { regrade?: bool
     const standard = await teacherStandard(test.id, submissionId);
     const outcome = await gradeRead(read, test.rubric, { exemplars: standard.exemplars, deadline });
     applyShifts(outcome, test.rubric, standard.shifts);
+    finalizeOutcome(outcome, test.rubric); // a written answer marked 0 always goes to the teacher
 
     // ---- 3. store: teacher decisions are never overwritten; everything else is replaced
     const { data: kept } = await db.from("question_results").select("q").eq("submission_id", submissionId).eq("approved", true);
@@ -104,6 +105,7 @@ export async function runGradingJob(submissionId: string, opts: { regrade?: bool
     const rows = outcome.questions.filter((q) => !approvedQs.has(q.q)).map((q) => ({
       submission_id: submissionId, q: q.q, max: q.max, score_a: q.scoreA, score_b: q.scoreB, ai_score: q.final, risk: q.risk,
       flags: q.flags, answer: q.answer ?? null, grade_a: q.gradeA ?? null, grade_b: q.gradeB ?? null,
+      learned: standard.exemplars.length > 0 || standard.shifts.size > 0, // follows this teacher's standard (see 0011)
     }));
     if (rows.length) {
       const { error: insErr } = await db.from("question_results").insert(rows);

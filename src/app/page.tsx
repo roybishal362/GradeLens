@@ -16,16 +16,16 @@ const mcqPct = Math.round((100 * summary.mcq.lettersCorrect) / Math.max(1, summa
 const FEATURES = [
   { icon: Highlighter, title: "Every mark shows its evidence", body: "The words behind each mark are highlighted on the student's page. Quotes are checked against the answer." },
   { icon: ScanLine, title: "Paper, phone or typed", body: "Students photograph their pages or type their answers, or you print QR answer sheets and scan the pile in any order." },
-  { icon: SlidersHorizontal, title: "Learns how you mark", body: "Your first decisions become the standard for the rest of the class. Every adjusted mark says why." },
+  { icon: SlidersHorizontal, title: "Learns how you mark", body: "Your first decisions become the standard for the rest of the class, and it shows how often you keep its marks. Every adjusted mark says why." },
   { icon: Lightbulb, title: "What the class misunderstood", body: "Wrong ideas grouped and counted, with a 10-minute re-teach plan, a worksheet and a re-test." },
   { icon: Send, title: "Results for students and parents", body: "Release when you're ready. Each student gets a private page with marks and feedback to read or listen to, and can ask for a re-check." },
   { icon: FileSpreadsheet, title: "Gradebook and exports", body: "Every student across every test, letter grades, and CSV files for Excel, Sheets or your school's system." },
   { icon: GraduationCap, title: "Practice for students", body: "A practice link gives instant feedback on any question, typed or handwritten, without it counting as a grade. Tutors and self-learners can use it too." },
-  { icon: ShieldCheck, title: "You stay in charge", body: "Nothing counts until you approve it, every change is recorded, and you can hide names while you mark." },
+  { icon: ShieldCheck, title: "Trust is earned, not assumed", body: "Nothing counts until you approve it. Marks can only be approved together on questions where it has matched you, and a 0 on a written answer always waits for you." },
 ];
 
 const FAQ = [
-  ["Is it accurate enough to mark on its own?", "No, and it isn't meant to. It does the first pass and shows its evidence; you make every decision."],
+  ["Is it accurate enough to mark on its own?", "No, and it isn't meant to. It does the first pass and shows its evidence; you make every decision, and it tells you how often you've kept its marks on each question."],
   ["What do students need?", "A phone with a camera, a device to type on, or nothing at all if you use printed answer sheets."],
   ["What can it mark?", "Written answers, maths working, labelled diagrams and multiple choice, in English."],
   ["Does it cost anything?", "No. It runs on free AI services, with a daily allowance per account."],
@@ -57,11 +57,11 @@ export default async function Home() {
           <div className="max-w-xl">
             <p className="text-[0.95rem] font-semibold text-redpen">For teachers, tutors and their students</p>
             <h1 className="mt-3 text-[2.5rem] font-[750] leading-[1.08] tracking-tight sm:text-[3rem]">
-              Marks you can check against the student&apos;s own words.
+              Marking that shows its working.
             </h1>
             <p className="mt-5 text-lg text-muted-foreground">
-              GradeLens reads photographed answer sheets, suggests every mark from your mark scheme and highlights the
-              handwriting behind it. You approve. You don&apos;t grade.
+              GradeLens reads photographed answer sheets and suggests every mark from your mark scheme, pointing to the
+              student&apos;s own words on the page. It learns how you mark, and has to match you before it can save you a click.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link href="/sample" className="rounded-md bg-redpen px-5 py-3 font-semibold text-white shadow-sm hover:bg-[#b81f1f]">Try it on real scripts</Link>

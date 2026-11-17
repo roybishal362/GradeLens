@@ -352,7 +352,7 @@ export async function copySampleClass(): Promise<ActionResult> {
         if (!ns) throw new Error("submission");
         const [{ data: pages }, { data: qrs }] = await Promise.all([
           admin.from("pages").select("page_no,storage_path,media_type,width,height").eq("submission_id", s.id),
-          admin.from("question_results").select("q,max,score_a,score_b,ai_score,risk,flags,answer,grade_a,grade_b,teacher_score,teacher_note,approved,approved_at,reference_score").eq("submission_id", s.id),
+          admin.from("question_results").select("q,max,score_a,score_b,ai_score,risk,flags,answer,grade_a,grade_b,teacher_score,teacher_note,approved,approved_at,reference_score,learned").eq("submission_id", s.id),
         ]);
         if (pages?.length) await admin.from("pages").insert(pages.map((p) => ({ ...p, submission_id: ns.id })));
         if (qrs?.length) await admin.from("question_results").insert(qrs.map((r) => ({ ...r, submission_id: ns.id })));

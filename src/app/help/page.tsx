@@ -97,7 +97,7 @@ export default function HelpPage() {
             <h3>Working faster</h3>
             <ul className="mt-1 list-disc pl-5">
               <li>Keys: <kbd>A</kbd> approve, <kbd>0</kbd>–<kbd>9</kbd> set a mark, <kbd>H</kbd> half mark, <kbd>J</kbd>/<kbd>K</kbd> next or previous question, <kbd>N</kbd>/<kbd>P</kbd> next or previous script, <kbd>?</kbd> shows the list.</li>
-              <li><em>Approve the ready ones</em> accepts every &ldquo;Ready&rdquo; mark on a script in one click.</li>
+              <li><em>Approve the marks it has earned</em> accepts &ldquo;Ready&rdquo; marks together, but only on multiple choice and on written questions where you kept GradeLens&apos; mark on at least 9 in 10 of the answers you checked one by one (at least 5). Each question shows its record. A written answer marked 0 always waits for you.</li>
               <li>Notes you write are offered again as one-click comments on the same question.</li>
               <li><em>Hide names</em> switches to codes for anonymous marking.</li>
               <li>After you&apos;ve reviewed a few scripts, <em>Re-mark the rest</em> marks the remaining scripts to your standard: your decisions become examples, and each question&apos;s suggestions shift by how much more or less generous you were. Every shifted mark says so.</li>

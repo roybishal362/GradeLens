@@ -15,7 +15,7 @@ import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 import { questionShifts, shifted } from "@/lib/grading/calibration";
-import type { StudentOutcome } from "@/lib/grading/pipeline";
+import { finalizeOutcome, type StudentOutcome } from "@/lib/grading/pipeline";
 import { clusterMisconceptions, planReteach, type Observation } from "@/lib/insights/agents";
 import { cachedGrade, cachedRead, calibrate, loadRubric, loadTeacher, PAGES, pageIndex, range } from "./mendeley-data";
 
@@ -54,7 +54,7 @@ describe("sample class", () => {
         q.flags = [...q.flags, `adjusted ${moved > q.final ? "+" : "−"}${Math.abs(moved - q.final)} to match your marking on this question (learned from ${sh.n} answers you reviewed)`];
         q.final = moved;
       }
-      o.total = o.questions.reduce((sum, q) => sum + q.final, 0);
+      finalizeOutcome(o, rubric); // as the product does: a written answer marked 0 waits for the teacher
     }
     console.log(`outcomes: ${calibOutcomes.size} calibration + ${testOutcomes.size} calibrated students; ${shifts.size} questions with a learned shift`);
     expect(testOutcomes.size).toBeGreaterThan(0);
@@ -105,7 +105,7 @@ describe("sample class", () => {
         return {
           submission_id: sub.id, q: q.q, max: q.max, score_a: q.scoreA, score_b: q.scoreB, ai_score: q.final, risk: q.risk, flags: q.flags,
           answer: q.answer ?? null, grade_a: q.gradeA ?? null, grade_b: q.gradeB ?? null, reference_score: ref ?? null,
-          approved: isCalib, approved_at: isCalib ? new Date().toISOString() : null,
+          approved: isCalib, approved_at: isCalib ? new Date().toISOString() : null, learned: !isCalib,
           teacher_score: teacherScore !== null && teacherScore !== q.final ? teacherScore : null,
           teacher_note: teacherScore !== null && teacherScore !== q.final ? "Mark from the dataset's teacher" : null,
         };

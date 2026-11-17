@@ -1,6 +1,7 @@
 # GradeLens
 
-**An AI grading co-pilot for handwritten answers. You approve. You don't grade.**
+**Marking that shows its working.** An AI marking co-pilot for handwritten answers: every suggested mark points to the
+student's own words, it learns each teacher's standard, and it has to earn approval question by question.
 
 GradeLens reads photographed answer sheets, suggests every mark from the teacher's mark scheme, and shows the exact
 handwriting behind each one. Nothing counts until the teacher approves it. Then it shows what the class misunderstood,
@@ -56,10 +57,13 @@ flowchart LR
 4. **Grade and verify.** Two different free models grade each criterion with an evidence quote. The verifier (code)
    rejects invented quotes, compares the two marks, routes low reading confidence and injection attempts to the teacher,
    and removes structure marks from diagrams that weren't drawn. The suggestion is the two graders' average, then the
-   question's learned shift (always shown on the mark).
-5. **Review.** Queue by risk, the student's page with the evidence highlighted, keyboard marking (A, 0-9, H, J/K, N/P),
-   bulk approval of ready marks. Decisions go through `review_mark` / `bulk_approve` (security-definer functions that
-   write the audit event and the mark in one transaction).
+   question's learned shift (always shown on the mark). A written answer marked 0 is never "ready" (harsh AI marks are
+   the ones people most often miss: PNAS Nexus, June 2026).
+5. **Review.** Queue by risk, the student's page with the evidence highlighted, keyboard marking (A, 0-9, H, J/K, N/P).
+   **Earned approval:** ready marks on a written question can only be approved together once the teacher has checked at
+   least 5 of its answers one by one and kept GradeLens' mark on 90% of them (`question_track` + `bulk_approve`, enforced
+   in the database; `src/lib/trust.ts`). Decisions go through `review_mark` / `bulk_approve` (security-definer functions
+   that write the audit event and the mark in one transaction).
 6. **Insights.** Item analysis (facility, discrimination), misconceptions grouped across the class (the AI proposes
    groups; membership is rebuilt by code), a re-teach plan + printable worksheet + re-test, and learning gain
    (Hake's normalised gain) once the re-test is marked. Student progress over time and a printable report.

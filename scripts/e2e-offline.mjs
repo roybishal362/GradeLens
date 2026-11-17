@@ -116,8 +116,11 @@ try {
   await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.startsWith("approve the"))?.click());
   await page.waitForFunction(() => document.body.innerText.includes("Approved "), { timeout: 15000 }).catch(() => {});
   await new Promise((r) => setTimeout(r, 1000));
-  const ready = (await rest(`question_results?submission_id=eq.${sub.id}&approved=is.true&select=id`)).length;
-  check("approve-all-ready approves the low-risk marks in one go", ready > nApproved, `${nApproved} -> ${ready} (${Date.now() - t} ms)`);
+  const afterBulk = await rest(`question_results?submission_id=eq.${sub.id}&approved=is.true&select=id,q`);
+  const bulkIds = new Set((await rest(`review_events?action=eq.bulk_approve&select=question_result_id`)).map((e) => e.question_result_id));
+  const bulkWritten = afterBulk.filter((x) => bulkIds.has(x.id) && x.q > 20).length;
+  check("approve-earned approves ready multiple-choice marks in one go", afterBulk.length > nApproved, `${nApproved} -> ${afterBulk.length} (${Date.now() - t} ms)`);
+  check("…but no written answer: those questions haven't earned it yet (5 checked, 90% kept)", bulkWritten === 0, `${bulkWritten} written answers bulk-approved`);
   const [s2] = await rest(`submissions?id=eq.${sub.id}&select=total,status`);
   log(`script total now ${s2.total} (${s2.status})`);
 
@@ -288,6 +291,32 @@ try {
   const copied = await rest(`submissions?test_id=eq.${copiedTestId}&select=id`);
   const copiedMarks = await rest(`question_results?select=id,submissions!inner(test_id)&submissions.test_id=eq.${copiedTestId}`);
   check("one click copies the 20 real sample scripts into the teacher's own workspace", copied.length === 20 && copiedMarks.length === 700, `${copied.length} scripts, ${copiedMarks.length} marks in ${((Date.now() - t) / 1000).toFixed(1)} s`);
+  // earned trust in the copied class: check 5 written Q25 answers one by one (keyboard A), then Q25 has earned
+  // approval together; nothing else written gets bulk-approved
+  const q25 = (await rest(`question_results?q=eq.25&approved=is.false&learned=is.true&select=id,submission_id,risk,answer,submissions!inner(test_id)&submissions.test_id=eq.${copiedTestId}`))
+    .filter((x) => x.answer?.text?.trim());
+  const reviewUrl = (sid) => `${APP}/app/tests/${copiedTestId}/review?s=${sid}&q=25`;
+  for (const x of q25.slice(0, 5)) {
+    await page.goto(reviewUrl(x.submission_id), { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => document.body.innerText.includes("Question 25"), { timeout: 60000 });
+    await page.waitForNetworkIdle({ idleTime: 600, timeout: 30000 }).catch(() => {});
+    await page.keyboard.press("a");
+    await page.waitForFunction(() => !document.body.innerText.includes("saving…"), { timeout: 15000 }).catch(() => {});
+    await page.waitForNetworkIdle({ idleTime: 800, timeout: 30000 }).catch(() => {});
+  }
+  const sixth = q25.slice(5).find((x) => x.risk === "low") ?? q25[5];
+  await page.goto(reviewUrl(sixth.submission_id), { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(() => document.body.innerText.includes("Question 25"), { timeout: 60000 });
+  const earnedText = await page.evaluate(() => document.body.innerText.includes("kept GradeLens' mark on 5 of the 5 answers"));
+  check("after 5 answers checked and kept, the question shows it has earned approval together", earnedText);
+  await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.startsWith("Approve every ready Q25 mark"))?.click());
+  await page.waitForFunction(() => document.body.innerText.includes("Approved "), { timeout: 20000 }).catch(() => {});
+  await new Promise((r) => setTimeout(r, 1500));
+  const bulkEv = new Set((await rest(`review_events?action=eq.bulk_approve&select=question_result_id`)).map((e) => e.question_result_id));
+  const copiedQr = await rest(`question_results?approved=is.true&select=id,q,submissions!inner(test_id)&submissions.test_id=eq.${copiedTestId}`);
+  const bulkQs = [...new Set(copiedQr.filter((x) => bulkEv.has(x.id)).map((x) => x.q))];
+  check("…and one click approves the other ready Q25 marks, and no other written question", bulkQs.includes(25) && bulkQs.every((q) => q === 25 || q <= 20),
+    `bulk-approved questions: ${bulkQs.join(", ") || "none"}; Q25 approved in bulk: ${copiedQr.filter((x) => bulkEv.has(x.id) && x.q === 25).length}`);
   await page.screenshot({ path: `${out}/06-scan-sent.png` });
 } catch (e) {
   problems.push(`FAILED: ${e.message}`);

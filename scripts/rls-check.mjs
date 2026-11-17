@@ -120,12 +120,35 @@ try {
     adjust.status < 300 && Number(after2.teacher_score) === 1.5 && after2.approved && after2.approved_by === A.id &&
     events.length === 1 && events[0].action === "adjust" && Number(events[0].from_score) === 1 && Number(events[0].to_score) === 1.5,
     `status ${adjust.status}`);
+  // Earned trust (0010/0011): no bulk approval on a written question the teacher hasn't checked 5 answers of
+  const early = await api("/rest/v1/rpc/bulk_approve", { method: "POST", token: A.token, body: { tid: testId } });
+  const stillPending = (await db.query(`select approved from public.question_results where id = $1`, [qr2])).rows[0].approved === false;
+  check("bulk approve refuses a written question that hasn't earned it (no track record yet)", early.json === 0 && stillPending, `returned ${JSON.stringify(early.json)}`);
+  // five other students' Q2 answers checked one by one, the suggestion kept every time → Q2 has earned it
+  for (let i = 0; i < 5; i++) {
+    const st = (await db.query(`insert into public.students (class_id, display_name, anon_code) values ($1, $2, $3) returning id`, [classId, `Track ${i}`, `T0${i}`])).rows[0].id;
+    const sb = (await db.query(`insert into public.submissions (test_id, student_id, status) values ($1, $2, 'approved') returning id`, [testId, st])).rows[0].id;
+    await db.query(`insert into public.question_results (submission_id, q, max, score_a, score_b, ai_score, risk, approved, answer)
+      values ($1, 2, 2, 2, 2, 2, 'low', true, '{"text":"a written answer"}')`, [sb]);
+  }
+  // a written answer marked 0 is never approved in bulk, even on a trusted question (harsh-mark guard)
+  const stZ = (await db.query(`insert into public.students (class_id, display_name, anon_code) values ($1, 'Zero', 'Z01') returning id`, [classId])).rows[0].id;
+  const subZ = (await db.query(`insert into public.submissions (test_id, student_id, status) values ($1, $2, 'graded') returning id`, [testId, stZ])).rows[0].id;
+  const qrZ = (await db.query(`insert into public.question_results (submission_id, q, max, score_a, score_b, ai_score, risk, answer)
+    values ($1, 2, 2, 0, 0, 0, 'low', '{"text":"a written answer"}') returning id`, [subZ])).rows[0].id;
+  const trackA = await api("/rest/v1/rpc/question_track", { method: "POST", token: A.token, body: { tid: testId } });
+  const trackB = await api("/rest/v1/rpc/question_track", { method: "POST", token: B.token, body: { tid: testId } });
+  check("the owner sees the question's track record; another teacher sees nothing",
+    Array.isArray(trackA.json) && trackA.json.some((t) => t.q === 2 && t.checked === 5 && t.kept === 5) && Array.isArray(trackB.json) && trackB.json.length === 0,
+    `A ${JSON.stringify(trackA.json)} B ${JSON.stringify(trackB.json)}`);
   const bulk = await api("/rest/v1/rpc/bulk_approve", { method: "POST", token: A.token, body: { tid: testId } });
   const s2 = (await db.query(`select status, total from public.submissions where id = $1`, [sub])).rows[0];
   const ev2 = (await db.query(`select action from public.review_events where question_result_id = $1`, [qr2])).rows;
-  check("bulk approve accepts low-risk marks, audits each, and completes the script",
+  const zero = (await db.query(`select approved from public.question_results where id = $1`, [qrZ])).rows[0];
+  check("once earned, bulk approve accepts the ready mark, audits it, and completes the script",
     bulk.json === 1 && ev2.length === 1 && ev2[0].action === "bulk_approve" && s2.status === "approved" && Number(s2.total) === 3.5,
     `returned ${JSON.stringify(bulk.json)}, status ${s2.status}, total ${s2.total}`);
+  check("a written answer marked 0 is never approved in bulk", zero.approved === false);
   const evDelete = await api(`/rest/v1/review_events?question_result_id=eq.${qr}`, { method: "DELETE", token: A.token, prefer: "return=representation" });
   const evLeft = (await db.query(`select count(*)::int as n from public.review_events where question_result_id = $1`, [qr])).rows[0].n;
   check("audit history cannot be deleted by the teacher", evLeft === 1, `status ${evDelete.status}`);

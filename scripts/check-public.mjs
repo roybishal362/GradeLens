@@ -7,7 +7,7 @@ const [out = "public-check"] = process.argv.slice(2);
 mkdirSync(out, { recursive: true });
 const APP = "http://localhost:3000";
 const PAGES = [
-  { path: "/", must: ["Marks you can check", "dataset's own teacher gave", "How it works", "Built around how teachers mark"] },
+  { path: "/", must: ["Marking that shows its working", "dataset's own teacher gave", "How it works", "Built around how teachers mark"] },
   { path: "/sample", must: ["Sample class", "Review the scripts", "Marked by the dataset"] },
   { path: "/sample/review", must: ["as read from the page", "The dataset's teacher gave"] },
   { path: "/sample/insights", must: ["What the class misunderstood", "Question by question", "Feedback for each student"] },

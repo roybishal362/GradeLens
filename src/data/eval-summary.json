@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-17T14:07:59.015Z",
+ "generatedAt": "2026-11-17T18:26:46.488Z",
  "dataset": {
   "name": "A Dataset of Digitized Student Examination Papers, Answer Keys, and Manual Evaluations for Automated Grading Research",
   "doi": "10.17632/sf3kvjwknt.1",
@@ -17,12 +17,14 @@
    "mae": 0.576,
    "bias": -0.518,
    "qwk": 0.515,
-   "autoApprovable": 0.862,
-   "withinHalfAmongLow": 0.563,
-   "withinHalfAmongFlagged": 0.789,
-   "errorsCaught": 0.071,
+   "autoApprovable": 0.435,
+   "withinHalfAmongLow": 0.8,
+   "withinHalfAmongFlagged": 0.436,
+   "errorsCaught": 0.786,
    "errors": 56,
-   "caught": 4,
+   "caught": 44,
+   "harshErrors": 54,
+   "harshCaught": 44,
    "unmarked": 27,
    "unmarkedGivenMarks": 2
   },
@@ -33,12 +35,14 @@
    "mae": 0.529,
    "bias": -0.406,
    "qwk": 0.555,
-   "autoApprovable": 0.877,
-   "withinHalfAmongLow": 0.636,
-   "withinHalfAmongFlagged": 0.647,
-   "errorsCaught": 0.12,
+   "autoApprovable": 0.514,
+   "withinHalfAmongLow": 0.817,
+   "withinHalfAmongFlagged": 0.448,
+   "errorsCaught": 0.74,
    "errors": 50,
-   "caught": 6,
+   "caught": 37,
+   "harshErrors": 46,
+   "harshCaught": 37,
    "unmarked": 27,
    "unmarkedGivenMarks": 2
   },
@@ -49,12 +53,14 @@
    "mae": 0.46,
    "bias": -0.221,
    "qwk": 0.626,
-   "autoApprovable": 0.862,
-   "withinHalfAmongLow": 0.739,
-   "withinHalfAmongFlagged": 0.632,
-   "errorsCaught": 0.184,
+   "autoApprovable": 0.681,
+   "withinHalfAmongLow": 0.787,
+   "withinHalfAmongFlagged": 0.591,
+   "errorsCaught": 0.474,
    "errors": 38,
-   "caught": 7,
+   "caught": 18,
+   "harshErrors": 27,
+   "harshCaught": 15,
    "unmarked": 27,
    "unmarkedGivenMarks": 2
   },
@@ -65,12 +71,14 @@
    "mae": 0.428,
    "bias": -0.13,
    "qwk": 0.638,
-   "autoApprovable": 0.877,
-   "withinHalfAmongLow": 0.727,
-   "withinHalfAmongFlagged": 0.647,
-   "errorsCaught": 0.154,
+   "autoApprovable": 0.703,
+   "withinHalfAmongLow": 0.763,
+   "withinHalfAmongFlagged": 0.61,
+   "errorsCaught": 0.41,
    "errors": 39,
-   "caught": 6,
+   "caught": 16,
+   "harshErrors": 22,
+   "harshCaught": 13,
    "unmarked": 27,
    "unmarkedGivenMarks": 2
   }
@@ -78,6 +86,68 @@
  "mcq": {
   "lettersRead": 280,
   "lettersCorrect": 276
+ },
+ "harshGuard": {
+  "before": {
+   "flagged": 0.123,
+   "errorsCaught": 0.154,
+   "harshCaught": 3
+  },
+  "studentsSeenWhenDesigned": [
+   "Student_6",
+   "Student_7",
+   "Student_8",
+   "Student_9",
+   "Student_10",
+   "Student_11",
+   "Student_13",
+   "Student_14",
+   "Student_15",
+   "Student_21",
+   "Student_23"
+  ]
+ },
+ "learningCurve": [
+  {
+   "scripts": 0,
+   "withinHalf": 0.594,
+   "mae": 0.576
+  },
+  {
+   "scripts": 3,
+   "withinHalf": 0.668,
+   "mae": 0.515
+  },
+  {
+   "scripts": 5,
+   "withinHalf": 0.745,
+   "mae": 0.475
+  },
+  {
+   "scripts": 7,
+   "withinHalf": 0.769,
+   "mae": 0.464
+  },
+  {
+   "scripts": 10,
+   "withinHalf": 0.79,
+   "mae": 0.446
+  }
+ ],
+ "earnedTrust": {
+  "rule": {
+   "minChecked": 5,
+   "minKeptRate": 0.9
+  },
+  "n": 138,
+  "oldButton": {
+   "approved": 121,
+   "wrong": 33
+  },
+  "earned": {
+   "approved": 5,
+   "wrong": 0
+  }
  },
  "teacherConsistency": {
   "mcqTotalsMatchPublishedKey": 13,

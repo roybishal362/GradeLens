@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   description: "GradeLens measured against a real teacher's marks on real handwritten exams, with its limits and where student work goes.",
 };
 
-type Mode = { n: number; exact: number; withinHalf: number; mae: number; bias: number; qwk: number; autoApprovable: number; withinHalfAmongLow: number | null; errorsCaught: number | null; errors: number; caught: number };
+type Mode = { n: number; exact: number; withinHalf: number; mae: number; bias: number; qwk: number; autoApprovable: number; withinHalfAmongLow: number | null; errorsCaught: number | null; errors: number; caught: number; harshErrors?: number; harshCaught?: number };
 const modes = summary.modes as Record<string, Mode>;
 const ORDER: { key: string; label: string; what: string }[] = [
   { key: "rubric only", label: "Mark scheme only", what: "GradeLens with nothing but the mark scheme." },
@@ -36,7 +36,11 @@ const ROWS: { label: string; help: string; get: (m: Mode) => string }[] = [
   { label: "Marked 'ready' (low risk)", help: "Share of answers GradeLens didn't flag for a closer look.", get: (m) => pct(m.autoApprovable) },
   { label: "…of which within half a mark", help: "", get: (m) => pct(m.withinHalfAmongLow) },
   { label: "Big differences flagged", help: "Differences over ½ mark that GradeLens had flagged for the teacher.", get: (m) => `${pct(m.errorsCaught)} (${m.caught} of ${m.errors})` },
+  { label: "…where GradeLens was harsher", help: "Big differences where GradeLens marked lower than the teacher, flagged for the teacher.", get: (m) => (m.harshErrors === undefined ? "–" : `${m.harshCaught} of ${m.harshErrors}`) },
 ];
+const curve = summary.learningCurve;
+const trust = summary.earnedTrust;
+const guard = summary.harshGuard;
 
 export default function TransparencyPage() {
   const tc = summary.teacherConsistency;
@@ -52,7 +56,8 @@ export default function TransparencyPage() {
         </p>
         <p className="mt-3 text-lg">
           That is not good enough to mark on its own, and GradeLens doesn&apos;t: <strong>nothing counts until a teacher approves it</strong>,
-          and every suggestion shows the student&apos;s words it was based on, so checking takes seconds.
+          every suggestion shows the student&apos;s words it was based on, and it can only approve marks together on questions where it
+          has already matched the teacher (<a href="#trust" className="underline underline-offset-2">why</a>).
         </p>
 
         <section className="mt-10" aria-labelledby="results">
@@ -82,6 +87,43 @@ export default function TransparencyPage() {
             <strong>Multiple choice:</strong> GradeLens read {summary.mcq.lettersCorrect} of {summary.mcq.lettersRead} handwritten answer letters
             correctly ({pct(summary.mcq.lettersCorrect / Math.max(1, summary.mcq.lettersRead))}), then marked them against the key with plain code.
           </p>
+        </section>
+
+        <section id="trust" className="mt-10 scroll-mt-6" aria-labelledby="trust-h">
+          <h2 id="trust-h" className="text-xl font-semibold">Trust has to be earned, question by question</h2>
+          <p className="mt-3">
+            &ldquo;A teacher checks it&rdquo; is not enough on its own. In an experiment with over 1,300 teachers, a too-harsh grade was
+            corrected less often when it was labelled as coming from AI than when the same grade came from a colleague (
+            <a className="underline underline-offset-2" href="https://www.eurekalert.org/news-releases/1130956">PNAS Nexus, June 2026</a>).
+            In our evaluation, {main.harshErrors ?? "most"} of the {main.errors} big differences were GradeLens marking <em>lower</em> than the teacher.
+            So GradeLens works against rubber-stamping in three ways:
+          </p>
+          <ol className="mt-3 list-decimal space-y-3 pl-5">
+            <li>
+              <strong>It learns each teacher&apos;s standard, and gets measurably closer.</strong> Within half a mark of the teacher, by how many of
+              the teacher&apos;s scripts it had learned from (each student predicted only from <em>other</em> students&apos; marks):
+              <table className="mt-2 border-collapse text-left text-[0.95rem]">
+                <thead><tr className="border-b border-ink"><th className="py-1 pr-6 font-semibold">Scripts the teacher marked</th>{curve.map((c) => <th key={c.scripts} className="py-1 pr-4 text-right font-semibold tabular-nums">{c.scripts}</th>)}</tr></thead>
+                <tbody><tr><td className="py-1 pr-6">Within half a mark</td>{curve.map((c) => <td key={c.scripts} className="py-1 pr-4 text-right tabular-nums">{pct(c.withinHalf)}</td>)}</tr></tbody>
+              </table>
+            </li>
+            <li>
+              <strong>A written answer is never marked 0 without the teacher.</strong> With this rule, flags catch {main.caught} of {main.errors} big
+              differences instead of {Math.round((guard.before.errorsCaught ?? 0) * main.errors)}, and {main.harshCaught} of {main.harshErrors} harsh
+              ones instead of {guard.before.harshCaught}, at the cost of {pct(1 - main.autoApprovable)} of answers waiting for a look instead
+              of {pct(guard.before.flagged)}. We wrote this rule after seeing these students&apos; results, so it is being re-tested on students it
+              has never seen.
+            </li>
+            <li>
+              <strong>Approving marks together has to be earned.</strong> On a written question, the teacher first checks at
+              least {trust.rule.minChecked} answers one by one; only if they kept GradeLens&apos; mark on {Math.round(trust.rule.minKeptRate * 100)}% of
+              them can its ready marks on that question be approved together (the database enforces this). Replaying this evaluation in
+              student order: approving every &ldquo;ready&rdquo; mark would have approved {trust.oldButton.approved} of {trust.n} answers
+              unseen, {trust.oldButton.wrong} of them more than half a mark off. Earned approval approved {trust.earned.approved},
+              with {trust.earned.wrong} off (with only {summary.testStudents} scripts per question here, few were left after the first checks).
+              Multiple choice is exempt: it is marked by code from the letter read.
+            </li>
+          </ol>
         </section>
 
         <section className="mt-10" aria-labelledby="context">
@@ -126,7 +168,7 @@ export default function TransparencyPage() {
           <ul className="mt-3 list-disc space-y-2 pl-5">
             <li>One teacher, one subject, one exam, university level, English, short answers worth 2 marks. Other subjects, ages, languages and longer answers are untested here.</li>
             <li>{main.n} answers is a small sample: the interval above shows how much the headline could move.</li>
-            <li>Flags catch only some of the big differences ({pct(main.errorsCaught)}): a &ldquo;ready&rdquo; mark still needs a glance. Bulk-approving ready marks is a convenience, not a guarantee.</li>
+            <li>Flags still miss {main.errors - main.caught} of the {main.errors} big differences: most are judgement calls (a 1 against a 2) where both AI markers agreed with each other but not with the teacher. That is why approving marks together has to be earned per question.</li>
             <li>Diagrams and long multi-step maths were tested only on a handful of practice pages, not on a public dataset.</li>
           </ul>
         </section>

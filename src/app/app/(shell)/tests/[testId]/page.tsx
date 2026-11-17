@@ -12,6 +12,7 @@ import { practiceLinkFor, siteOrigin, uploadLinkFor } from "@/lib/db/teacher";
 import { SUB_COLS, type SubmissionRow } from "@/lib/db/types";
 import { reviewTime, summaryStats } from "@/lib/results";
 import { userDb } from "@/lib/supabase/clients";
+import { agreement, trustFor, type Track } from "@/lib/trust";
 import { LiveStatus, ScriptActions, UploadControls } from "./controls";
 import { PracticePanel } from "./practice-panel";
 import { GradeBoundaries, ResultsPanel } from "./results-panel";
@@ -37,7 +38,7 @@ async function View({ params }: Pick<PageProps<"/app/tests/[testId]">, "params">
   if (!data) notFound();
   const { test, lines } = data;
   const db = await userDb();
-  const [{ data: subs }, link, origin, { data: requests }, practiceLink, { data: attempts }, { data: events }] = await Promise.all([
+  const [{ data: subs }, link, origin, { data: requests }, practiceLink, { data: attempts }, { data: events }, { data: trackRows }] = await Promise.all([
     db.from("submissions").select(SUB_COLS).eq("test_id", testId).returns<SubmissionRow[]>(),
     uploadLinkFor(testId),
     siteOrigin(),
@@ -45,7 +46,9 @@ async function View({ params }: Pick<PageProps<"/app/tests/[testId]">, "params">
     practiceLinkFor(testId),
     db.from("practice_attempts").select("student_id,score,max,result,created_at").eq("test_id", testId).order("created_at", { ascending: false }).limit(300),
     db.from("review_events").select("created_at,action,question_results!inner(submissions!inner(test_id))").eq("question_results.submissions.test_id", testId).order("created_at").limit(10000),
+    db.rpc("question_track", { tid: testId }),
   ]);
+  const tracks = ((trackRows ?? []) as Track[]).map((t) => ({ q: Number(t.q), checked: Number(t.checked), kept: Number(t.kept), close: Number(t.close) }));
   const timing = reviewTime(((events ?? []) as { created_at: string; action: string }[]).map((e) => ({ at: e.created_at, bulk: e.action === "bulk_approve" })));
   type Attempt = { student_id: string | null; score: number; max: number; result: { misconceptions: string[] }[]; created_at: string };
   const att = (attempts ?? []) as Attempt[];
@@ -151,6 +154,21 @@ async function View({ params }: Pick<PageProps<"/app/tests/[testId]">, "params">
                   <span className="text-muted-foreground"> Measured from your decisions; pauses over 2 minutes don&apos;t count.</span>
                 </p>
               )}
+              {(() => {
+                const written = tracks.filter((t) => test.rubric.questions.find((q) => q.q === t.q)?.type !== "mcq");
+                const a = agreement(written);
+                if (!a.checked) return null;
+                const pct = (x: number) => `${Math.round((100 * x) / a.checked)}%`;
+                const earned = written.filter((t) => trustFor(t, false).kind === "trusted").map((t) => `Q${t.q}`);
+                return (
+                  <p className="mt-2 text-[0.9rem]">
+                    <span className="font-semibold">How closely GradeLens marks like you:</span> on the {a.checked} written answers you checked one by one,
+                    you kept its mark on {a.kept} ({pct(a.kept)}) and were within half a mark on {a.close} ({pct(a.close)}).
+                    {earned.length ? ` Its ready marks can be approved together on ${earned.join(", ")}.` : " No written question has earned approval together yet."}
+                    <span className="text-muted-foreground"> After it re-marks to your standard, only decisions on the new marks count.</span>
+                  </p>
+                );
+              })()}
               {gradeCounts.length > 0 && (
                 <p className="mt-2 flex flex-wrap gap-2 text-[0.9rem]">
                   {gradeCounts.map((g) => <span key={g.label} className="rounded-full bg-secondary px-2.5 py-0.5"><span className="font-semibold">{g.label}</span> {g.n}</span>)}

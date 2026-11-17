@@ -10,6 +10,7 @@ import type { PageRow, QuestionResultRow } from "@/lib/db/types";
 import { evidenceLines, pageOfLine } from "@/lib/grading/evidence";
 import type { Rubric } from "@/lib/grading/schemas";
 import { browserDb } from "@/lib/supabase/browser";
+import { bulkAllowed, trackFrom, trustFor, trustLine, type Track } from "@/lib/trust";
 
 export type ScriptSummary = {
   id: string; status: string; total: number | null; max_total: number | null; risk: "low" | "medium" | "high" | null;
@@ -21,6 +22,7 @@ type Props = {
   testId: string;
   title: string;
   rubric: Rubric;
+  track?: Track[]; // per question: answers checked one by one and how often the suggestion was kept (server)
   basePath: string; // e.g. /app/tests/<id>/review or /sample/review
   scripts: ScriptSummary[];
   current: { id: string; name: string; code: string; warnings: string[]; results: QuestionResultRow[]; pages: (PageRow & { url: string })[] } | null;
@@ -58,13 +60,14 @@ function explain(flag: string): string {
   if (flag.startsWith("more than one option")) return `More than one option was chosen ${flag.slice(21)}.`;
   if (flag.startsWith("adjusted ")) return `${flag.charAt(0).toUpperCase()}${flag.slice(1)}.`;
   if (flag.startsWith("no option letter")) return "No option letter could be read. Check the page.";
+  if (flag.startsWith("0 marks for a written answer")) return "GradeLens gave 0 to a written answer. Too-harsh marks are the AI mistakes people most often miss, so it always waits for you.";
   return flag;
 }
 
 export function ReviewWorkspace(props: Props) {
   const { mode, rubric, current } = props;
   const router = useRouter();
-  const [results, setResults] = useState<QuestionResultRow[]>(current?.results ?? []);
+  const [results, setResults] = useState<(QuestionResultRow & { bulk?: boolean })[]>(current?.results ?? []);
   // Open where the teacher's attention is most useful: a flagged answer that has writing, then any flagged one.
   const [sel, setSel] = useState(() => {
     const rs = current?.results ?? [];
@@ -100,6 +103,23 @@ export function ReviewWorkspace(props: Props) {
 
   const flash = (t: string) => { setToast(t); setTimeout(() => setToast(null), 2500); };
 
+  // Earned trust: ready marks are approved together only on questions where GradeLens has matched this teacher
+  // (src/lib/trust.ts; the database enforces the same rule). The sample isn't saved, so its own decisions count locally.
+  const loadedApproved = useMemo(() => new Set((current?.results ?? []).filter((x) => x.approved).map((x) => x.id)), [current]);
+  const tracks = useMemo(() => {
+    const m = new Map((props.track ?? []).map((t) => [t.q, { ...t }]));
+    if (mode === "sample") {
+      for (const [q, t] of trackFrom(results.filter((x) => !loadedApproved.has(x.id)))) {
+        const was = m.get(q) ?? { q, checked: 0, kept: 0, close: 0 };
+        m.set(q, { q, checked: was.checked + t.checked, kept: was.kept + t.kept, close: was.close + t.close });
+      }
+    }
+    return m;
+  }, [props.track, results, loadedApproved, mode]);
+  const isMcq = useCallback((q: number) => rubric.questions.find((x) => x.q === q)?.type === "mcq", [rubric]);
+  const trustOf = (q: number) => trustFor(tracks.get(q), isMcq(q));
+  const bulkOk = (x: QuestionResultRow) => !x.approved && x.risk === "low" && bulkAllowed(trustOf(x.q)) && (isMcq(x.q) || x.ai_score > 0);
+
   const decide = useCallback((act: "approve" | "adjust" | "unapprove", score?: number) => {
     if (!r) return;
     const next = results.map((x) => (x.id === r.id
@@ -125,19 +145,22 @@ export function ReviewWorkspace(props: Props) {
     })();
   }, [r, results, sel, note, mode, router]);
 
-  const approveReady = (scope: "script" | "test") => {
+  const approveReady = (scope: "script" | "test" | "question") => {
+    const q = r?.q;
+    const pick = (x: QuestionResultRow) => bulkOk(x) && (scope !== "question" || x.q === q);
+    const here = results.filter(pick).length;
     if (mode === "sample") {
-      setResults((rs) => rs.map((x) => (x.risk === "low" ? { ...x, approved: true } : x)));
-      flash("Ready marks approved (sample: not saved).");
+      setResults((rs) => rs.map((x) => (pick(x) ? { ...x, approved: true, bulk: true } : x)));
+      flash(here ? `Approved ${here} earned mark${here === 1 ? "" : "s"} (sample: not saved).` : "Nothing has earned approval together yet: check answers one by one.");
       return;
     }
     void (async () => {
       setBulkBusy(true);
-      const { data, error } = await browserDb().rpc("bulk_approve", { tid: props.testId, sid: scope === "script" ? current?.id : null });
+      const { data, error } = await browserDb().rpc("bulk_approve", { tid: props.testId, sid: scope === "script" ? current?.id : null, qn: scope === "question" ? q : null });
       setBulkBusy(false);
       if (error) { flash("That didn't save. Try again."); return; }
-      if (scope === "script") setResults((rs) => rs.map((x) => (x.risk === "low" ? { ...x, approved: true } : x)));
-      flash(`Approved ${data} mark${data === 1 ? "" : "s"}.`);
+      setResults((rs) => rs.map((x) => (pick(x) ? { ...x, approved: true, bulk: true } : x)));
+      flash(data ? `Approved ${data} mark${data === 1 ? "" : "s"}.` : "Nothing has earned approval together yet. Check 5 answers on a question one by one first.");
       startRefresh(() => router.refresh());
     })();
   };
@@ -166,7 +189,7 @@ export function ReviewWorkspace(props: Props) {
   }, [r, results.length, decide, idx, props.scripts, props.basePath, router]);
 
   const pendingCount = results.filter((x) => !x.approved).length;
-  const readyCount = results.filter((x) => !x.approved && x.risk === "low").length;
+  const readyCount = results.filter(bulkOk).length;
   const total = results.reduce((s, x) => s + markOf(x), 0);
   const max = results.reduce((s, x) => s + x.max, 0);
 
@@ -203,8 +226,9 @@ export function ReviewWorkspace(props: Props) {
             </div>
             <button type="button" disabled={bulkBusy} onClick={() => approveReady("test")}
               className="mt-2 w-full rounded-md border border-redpen px-3 py-1.5 text-[0.95rem] font-semibold text-redpen hover:bg-redpen hover:text-white disabled:opacity-50">
-              Approve every ready mark
+              Approve the marks it has earned
             </button>
+            <p className="mt-1 text-[0.8rem] leading-snug text-muted-foreground">Ready marks on multiple choice, and on questions where you kept its mark on 9 in 10 answers you checked (at least 5).</p>
           </div>
           <ol>
             {props.scripts.map((s) => (
@@ -295,6 +319,19 @@ export function ReviewWorkspace(props: Props) {
                       </button>
                     </div>
                   ))}
+                  {!isMcq(r.q) && (() => {
+                    const t = trustOf(r.q);
+                    return (
+                      <div className={`mt-3 rounded-md border px-3 py-2 text-[0.95rem] ${t.kind === "trusted" ? "border-ok/40 bg-ok/5" : t.kind === "check" ? "border-check/50 bg-check/5" : "border-ruling bg-secondary/40"}`}>
+                        <p>{trustLine(t)}</p>
+                        {t.kind === "trusted" && mode === "teacher" && (
+                          <button type="button" disabled={bulkBusy} onClick={() => approveReady("question")} className="mt-1 font-semibold text-redpen underline underline-offset-4 disabled:opacity-50">
+                            Approve every ready Q{r.q} mark in this test
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {r.flags.length > 0 && (
                     <ul className="mt-3 space-y-1 border-l-2 border-check pl-3 text-[0.95rem]">
                       {r.flags.map((f) => <li key={f}>{explain(f)}</li>)}

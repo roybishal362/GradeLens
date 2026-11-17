@@ -119,6 +119,20 @@ export function blank(): Verified {
 export const BLANK_FLAG = "no answer found: confirm the question was left blank";
 
 /**
+ * Harsh marks are the AI errors people most often let through: teachers corrected too-harsh grades less often when
+ * they were labelled as AI (PNAS Nexus, June 2026), and 22 of the 39 big differences in our evaluation were the AI
+ * marking lower than the teacher. So a written answer never gets 0 without the teacher's look.
+ * Runs AFTER learned shifts (a shift can move a mark to or from 0). Multiple choice is marked by code and exempt.
+ */
+export const HARSH_FLAG = "0 marks for a written answer: check it";
+export function guardHarsh(q: { final: number; risk: Risk; flags: string[] }, answered: boolean, isMcq: boolean): void {
+  q.flags = q.flags.filter((f) => f !== HARSH_FLAG);
+  if (!answered || isMcq || q.final > 0) return;
+  q.flags.push(HARSH_FLAG);
+  if (q.risk === "low") q.risk = "medium";
+}
+
+/**
  * The option a student chose in a multiple-choice answer: "B", "b)", "(B)", "Option B", "3. B" -> "B".
  * Returns null when no option is visible, or "AMBIGUOUS:X,Y" when more than one is.
  */

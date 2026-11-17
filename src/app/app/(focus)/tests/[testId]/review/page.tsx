@@ -29,6 +29,7 @@ async function View({ params, searchParams }: Pick<PageProps<"/app/tests/[testId
       testId={testId}
       title={data.test.title}
       rubric={data.test.rubric}
+      track={data.track}
       basePath={`/app/tests/${testId}/review`}
       scripts={data.scripts.map((s) => ({ id: s.id, status: s.status, total: s.total, max_total: s.max_total, risk: s.risk, warnings: s.warnings, name: s.student.display_name, code: s.student.anon_code }))}
       commentBank={data.commentBank}

@@ -19,7 +19,8 @@ import type { ReadStep } from "@/lib/grading/pipeline";
 import { draftRubric } from "@/lib/grading/rubric-agent";
 import type { Rubric } from "@/lib/grading/schemas";
 import { questionShifts, shifted } from "@/lib/grading/calibration";
-import { mcqChoice } from "@/lib/grading/verifier";
+import { guardHarsh, mcqChoice, type Risk } from "@/lib/grading/verifier";
+import { bulkAllowed, MIN_CHECKED, MIN_KEPT_RATE, trustFor, type Track } from "@/lib/trust";
 import { cachedGrade, cachedRead, calibrate, loadQuestions, loadRubric, loadTeacher, OUT, range, RUBRIC_FILE, type Teacher } from "./mendeley-data";
 
 // ---------------------------------------------------------------- metrics
@@ -73,6 +74,7 @@ function metrics(rows: Row[]) {
       withinHalfAmongLow: share(low.filter(within).length, low.length),
       withinHalfAmongFlagged: share(flagged.filter(within).length, flagged.length),
       errorsCaught: share(caughtN, wrong.length), errors: wrong.length, caught: caughtN,
+      harshErrors: wrong.filter((x) => x.teacher - x.ai > 0.5).length, harshCaught: wrong.filter((x) => x.teacher - x.ai > 0.5 && x.risk !== "low").length,
       unmarked: rows.filter((x) => x.teacher === null).length,
       unmarkedGivenMarks: rows.filter((x) => x.teacher === null && x.ai > 0).length,
     },
@@ -85,10 +87,53 @@ function metrics(rows: Row[]) {
       "Answers auto-approvable (low risk)": pct(low.length, n),
       "Within ±0.5 among low-risk answers": pct(low.filter(within).length, low.length),
       "Within ±0.5 among flagged answers": pct(flagged.filter(within).length, flagged.length),
+      "Harsh errors (AI below the teacher) caught by a flag": `${wrong.filter((x) => x.teacher - x.ai > 0.5 && x.risk !== "low").length}/${wrong.filter((x) => x.teacher - x.ai > 0.5).length}`,
       "Errors > 0.5 caught by a flag": `${pct(wrong.filter((x) => x.risk !== "low").length, wrong.length)} (${wrong.filter((x) => x.risk !== "low").length}/${wrong.length})`,
       "Items the teacher left unmarked (NC): AI gave > 0": `${rows.filter((x) => x.teacher === null && x.ai > 0).length} of ${rows.filter((x) => x.teacher === null).length}`,
     } as Record<string, string>,
   };
+}
+
+/**
+ * "The more you mark, the more it marks like you", measured without new model calls: for each test student, learn
+ * each question's shift from k OTHER test students' teacher marks (every combination), then compare with the teacher.
+ */
+function learningCurve(rows: Row[], ks: number[]) {
+  const marked = rows.filter((x) => x.teacher !== null) as (Row & { teacher: number })[];
+  const students = [...new Set(marked.map((x) => x.student))];
+  const combos = (arr: string[], k: number): string[][] => (k === 0 ? [[]] : arr.flatMap((v, i) => combos(arr.slice(i + 1), k - 1).map((c) => [v, ...c])));
+  return ks.filter((k) => k < students.length).map((k) => {
+    let within = 0, n = 0, abs = 0;
+    for (const s of students) {
+      for (const pick of combos(students.filter((o) => o !== s), k)) {
+        const chosen = new Set(pick);
+        const sh = questionShifts(marked.filter((x) => chosen.has(x.student)).map((x) => ({ q: x.q, ai: x.ai, teacher: x.teacher })));
+        for (const x of marked) {
+          if (x.student !== s) continue;
+          const a = shifted(x.ai, 2, sh.get(x.q)?.shift, x.aiText.trim().length > 0);
+          n++; abs += Math.abs(a - x.teacher); if (Math.abs(a - x.teacher) <= 0.5) within++;
+        }
+      }
+    }
+    return { scripts: k, withinHalf: Math.round((1000 * within) / n) / 1000, mae: Math.round((1000 * abs) / n) / 1000 };
+  });
+}
+
+/** Replays review in student order: a question's ready marks are approved without a look only once it has earned it. */
+function trustSimulation(rows: Row[], order: string[], oldReady: (x: Row) => boolean) {
+  const marked = rows.filter((x) => x.teacher !== null) as (Row & { teacher: number })[];
+  const off = (x: Row & { teacher: number }) => Math.abs(x.ai - x.teacher) > 0.5;
+  const old = marked.filter(oldReady);
+  let approved = 0, wrong = 0;
+  for (const q of [...new Set(marked.map((x) => x.q))]) {
+    const track: Track = { q, checked: 0, kept: 0, close: 0 };
+    for (const x of marked.filter((r) => r.q === q).sort((a, b) => order.indexOf(a.student) - order.indexOf(b.student))) {
+      if (x.risk === "low" && bulkAllowed(trustFor(track, false))) { approved++; if (off(x)) wrong++; continue; }
+      if (!x.aiText.trim()) continue; // blanks say nothing about marking
+      track.checked++; if (x.ai === x.teacher) track.kept++; if (!off(x)) track.close++;
+    }
+  }
+  return { n: marked.length, oldButton: { approved: old.length, wrong: old.filter(off).length }, earned: { approved, wrong } };
 }
 
 describe("Mendeley real-data evaluation", () => {
@@ -168,6 +213,20 @@ describe("Mendeley real-data evaluation", () => {
     const dropped = [...new Set(rows[modes[0]].map((x) => x.student))].filter((st) => !complete.has(st));
     if (dropped.length) note(`left out of the comparison (not graded in every mode, e.g. a free-model failure): ${dropped.join(", ")}`);
     for (const mode of modes) rows[mode] = rows[mode].filter((x) => complete.has(x.student));
+    // Before the harsh-mark guard: what the old "approve every ready mark" button would have approved.
+    const last0 = modes[modes.length - 1];
+    const beforeGuard = metrics(rows[last0].map((x) => ({ ...x }))).numbers;
+    const oldReady = new Set(rows[last0].filter((x) => x.risk === "low").map((x) => `${x.student}:${x.q}`));
+    // The guard exactly as the product applies it after learned shifts. It was designed on Nov 17 after seeing these
+    // students' results, so its clean test is on students graded after that (listed in the report).
+    for (const mode of modes) for (const x of rows[mode]) {
+      const g = { final: x.ai, risk: x.risk as Risk, flags: x.flags };
+      guardHarsh(g, x.aiText.trim().length > 0, false);
+      x.risk = g.risk; x.flags = g.flags;
+    }
+    const studentOrder = [...complete].sort((a, b) => Number(a.split("_")[1]) - Number(b.split("_")[1]));
+    const curve = learningCurve(rows["rubric only"], [0, 3, 5, 7, 10]);
+    const trustSim = trustSimulation(rows[last0], studentOrder, (x) => oldReady.has(`${x.student}:${x.q}`));
     const m = Object.fromEntries(modes.map((mode) => [mode, metrics(rows[mode])]));
     const keys = Object.keys(m[modes[0]].table);
     const mcqWithTruth = mcqRows.filter((x) => x.truth);
@@ -197,6 +256,12 @@ describe("Mendeley real-data evaluation", () => {
       ``,
       `## Disagreements > 0.5 mark (${last})`,
       ...m[last].wrong.map((x) => `- ${x.student} Q${x.q}: AI ${x.ai} (A ${x.scoreA}, B ${x.scoreB}) vs teacher ${x.teacher} [${x.risk}] ${x.flags.join("; ")} — read: "${x.aiText}"`),
+      ``, `## Learning curve (leave-one-student-out: shifts learned from k other test students' teacher marks, rubric-only gradings)`,
+      `| teacher-marked scripts | within ±0.5 | MAE |`, `|---|---|---|`, ...curve.map((c) => `| ${c.scripts} | ${(100 * c.withinHalf).toFixed(1)}% | ${c.mae.toFixed(3)} |`),
+      ``, `## Earned bulk approval (${last}; scripts reviewed in student order; rule: ≥${MIN_CHECKED} checked, ≥${100 * MIN_KEPT_RATE}% kept)`,
+      `- old "approve every ready mark": ${trustSim.oldButton.approved} of ${trustSim.n} approved without a look, ${trustSim.oldButton.wrong} of them > 0.5 off`,
+      `- earned, per question: ${trustSim.earned.approved} approved without a look, ${trustSim.earned.wrong} of them > 0.5 off`,
+      `- harsh-mark guard: errors caught by a flag ${beforeGuard.caught}/${beforeGuard.errors} before → ${m[last].numbers.caught}/${m[last].numbers.errors} after; harsh ones ${beforeGuard.harshCaught}/${beforeGuard.harshErrors} → ${m[last].numbers.harshCaught}/${m[last].numbers.harshErrors}`,
       ``, `## MCQ misreads`,
       ...mcqWithTruth.filter((x) => x.read !== x.truth).map((x) => `- ${x.student} Q${x.q}: read "${x.read}" vs teacher's record "${x.truth}"`),
       ...mcqTotals.filter((x) => x.ai !== x.teacher).map((x) => `- ${x.student}: MCQ total ${x.ai} vs teacher ${x.teacher}`),
@@ -218,6 +283,9 @@ describe("Mendeley real-data evaluation", () => {
       examplesUsed: exemplars.length,
       modes: Object.fromEntries(modes.map((mode) => [mode, m[mode].numbers])),
       mcq: { lettersRead: mcqWithTruth.length, lettersCorrect: mcqOk },
+      harshGuard: { before: { flagged: Math.round((1 - (beforeGuard.autoApprovable ?? 0)) * 1000) / 1000, errorsCaught: beforeGuard.errorsCaught, harshCaught: beforeGuard.harshCaught }, studentsSeenWhenDesigned: studentOrder },
+      learningCurve: curve,
+      earnedTrust: { rule: { minChecked: MIN_CHECKED, minKeptRate: MIN_KEPT_RATE }, ...trustSim },
       teacherConsistency: {
         mcqTotalsMatchPublishedKey: mcqTotalMatches(key),
         bestAlternativeKey: bestAlt && bestAlt.matches > mcqTotalMatches(key) ? { question: bestAlt.q, published: key[bestAlt.q], alternative: bestAlt.letter, matches: bestAlt.matches } : null,

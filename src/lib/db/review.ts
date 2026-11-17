@@ -3,6 +3,7 @@ import "server-only";
 import { QR_COLS, SUB_COLS, TEST_COLS, type PageRow, type QuestionResultRow, type StudentRow, type SubmissionRow, type TestRow } from "@/lib/db/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { adminDb, userDb } from "@/lib/supabase/clients";
+import type { Track } from "@/lib/trust";
 
 export type ReviewScript = SubmissionRow & { student: Pick<StudentRow, "id" | "display_name" | "anon_code"> };
 export type ReviewData = {
@@ -13,6 +14,7 @@ export type ReviewData = {
   current: { script: ReviewScript; results: QuestionResultRow[]; pages: (PageRow & { url: string })[] } | null;
   commentBank: Record<number, string[]>;
   requests: { id: string; q: number; message: string }[];
+  track: Track[]; // per question: answers the teacher checked one by one, and how often they kept the suggestion
 };
 
 const RANK = { high: 0, medium: 1, low: 2 } as const;
@@ -25,11 +27,13 @@ export async function loadReview(testId: string, submissionId?: string, client?:
   const db = client ?? (await userDb());
   const { data: test } = await db.from("tests").select(TEST_COLS).eq("id", testId).maybeSingle<TestRow>();
   if (!test) return null;
-  const [{ data: cls }, { data: subs }, { data: students }] = await Promise.all([
+  const [{ data: cls }, { data: subs }, { data: students }, { data: trackRows }] = await Promise.all([
     db.from("classes").select("name,is_sample").eq("id", test.class_id).single<{ name: string; is_sample: boolean }>(),
     db.from("submissions").select(SUB_COLS).eq("test_id", testId).in("status", ["graded", "approved"]).returns<SubmissionRow[]>(),
     db.from("students").select("id,display_name,anon_code").eq("class_id", test.class_id).returns<StudentRow[]>(),
+    db.rpc("question_track", { tid: testId }),
   ]);
+  const track = ((trackRows ?? []) as Track[]).map((t) => ({ q: Number(t.q), checked: Number(t.checked), kept: Number(t.kept), close: Number(t.close) }));
   const byId = new Map((students ?? []).map((s) => [s.id, s]));
   const scripts: ReviewScript[] = (subs ?? [])
     .filter((s) => byId.has(s.student_id))
@@ -41,7 +45,7 @@ export async function loadReview(testId: string, submissionId?: string, client?:
       a.student.display_name.localeCompare(b.student.display_name, undefined, { numeric: true }));
 
   const script = scripts.find((s) => s.id === submissionId) ?? scripts[0];
-  if (!script) return { test, className: cls?.name ?? "", isSample: Boolean(cls?.is_sample), scripts, current: null, commentBank: {}, requests: [] };
+  if (!script) return { test, className: cls?.name ?? "", isSample: Boolean(cls?.is_sample), scripts, current: null, commentBank: {}, requests: [], track };
 
   const [{ data: results }, { data: pages }, { data: notes }, { data: requests }] = await Promise.all([
     db.from("question_results").select(QR_COLS).eq("submission_id", script.id).order("q").returns<QuestionResultRow[]>(),
@@ -73,5 +77,6 @@ export async function loadReview(testId: string, submissionId?: string, client?:
     },
     commentBank,
     requests: (requests ?? []) as { id: string; q: number; message: string }[],
+    track,
   };
 }
