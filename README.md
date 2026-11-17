@@ -1,5 +1,7 @@
 # GradeLens
 
+[![CI](https://github.com/roybishal362/GradeLens/actions/workflows/ci.yml/badge.svg)](https://github.com/roybishal362/GradeLens/actions/workflows/ci.yml)
+
 **Marking that shows its working.** An AI marking co-pilot for handwritten answers: every suggested mark points to the
 student's own words, it learns each teacher's standard, and it has to earn approval question by question.
 
