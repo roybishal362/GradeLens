@@ -1,0 +1,27 @@
+name: CI
+
+# Every push and pull request: types, lint and unit tests. No secrets needed (the security checks against the
+# database and the browser tests run locally: npm run db:rls-check, node scripts/e2e-offline.mjs).
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx next typegen
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
