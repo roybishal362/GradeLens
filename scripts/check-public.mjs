@@ -7,12 +7,13 @@ const [out = "public-check"] = process.argv.slice(2);
 mkdirSync(out, { recursive: true });
 const APP = "http://localhost:3000";
 const PAGES = [
-  { path: "/", must: ["Marks you can check", "dataset's own teacher gave"] },
+  { path: "/", must: ["Marks you can check", "dataset's own teacher gave", "How it works", "Built around how teachers mark"] },
   { path: "/sample", must: ["Sample class", "Review the scripts", "Marked by the dataset"] },
-  { path: "/sample/review", must: ["What the student wrote", "The dataset's teacher gave"] },
+  { path: "/sample/review", must: ["as read from the page", "The dataset's teacher gave"] },
   { path: "/sample/insights", must: ["What the class misunderstood", "Question by question", "Feedback for each student"] },
   { path: "/transparency", must: ["How accurate is GradeLens?", "Where students' work goes"] },
   { path: "/sign-in", must: ["Continue with Google", "Try it as a guest"] },
+  { path: "/help", must: ["Getting started", "Reviewing marks", "Returning results"] },
 ];
 const views = [
   { name: "desktop", width: 1440, height: 950, deviceScaleFactor: 1 },

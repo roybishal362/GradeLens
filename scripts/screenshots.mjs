@@ -64,6 +64,10 @@ try {
   const { data: left } = await sb.from("question_results").select("id").eq("submission_id", subIds[0]).eq("approved", false);
   for (const r of left ?? []) await sb.rpc("review_mark", { qid: r.id, act: "approve" });
 
+  // results released and a teacher name set, so the student's page and the reports show real content
+  await sb.from("tests").update({ results_released: true, released_at: new Date().toISOString(), grade_boundaries: [{ label: "A", min: 70 }, { label: "B", min: 55 }, { label: "C", min: 40 }, { label: "D", min: 0 }] }).eq("id", test.id);
+  await sb.from("teacher_profiles").upsert({ user_id: created.id, display_name: "Ms Rivera", school: "Demo High School" });
+  const [{ result_token: graceToken }] = await rest(`submissions?id=eq.${subIds[0]}&select=result_token`);
   const desktop = { width: 1440, height: 900, deviceScaleFactor: 1 };
   const phone = { width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
   const page = await browser.newPage();
@@ -95,6 +99,7 @@ try {
   await shot("06-sample-insights", "Class insights: misconceptions, re-teach plan, item analysis, feedback", "/sample/insights");
   await shot("07-transparency", "How accurate is it? (measured on real exams) and where student work goes", "/transparency");
   await shot("08-sign-in", "Sign in (Google or guest)", "/sign-in");
+  await shot("08b-help", "Help: getting started, photos, reviewing, results, exports, questions", "/help");
   // ---- teacher
   await shot("09-dashboard", "Teacher: your classes", "/app");
   await shot("10-class", "Teacher: class page (tests and roster)", `/app/classes/${classId}`);
@@ -105,6 +110,10 @@ try {
   await shot("15-sheets", "Teacher: printable QR answer sheets", `/app/tests/${test.id}/sheets?pages=1`, { full: false });
   await shot("16-report", "Teacher: report for the student and parents", `/app/report/${subIds[0]}`);
   await shot("17-progress", "Teacher: a student's progress and misconceptions", `/app/students/${studs[0].id}`);
+  await shot("17b-gradebook", "Teacher: class gradebook (every student, every test, CSV download)", `/app/classes/${classId}/gradebook`);
+  await shot("17c-reports", "Teacher: printable reports for every student, with a QR code to their results", `/app/tests/${test.id}/slips`, { full: false });
+  await shot("17d-settings", "Teacher: settings (name on reports, today's free usage, delete account)", "/app/settings");
+  await shot("17e-student-results", "Student: their private results page (after the teacher releases results)", `/r/${graceToken}`, { view: phone });
   // scan page with real sheet photos (from the sheets page) sorted by QR
   await page.setViewport(desktop);
   await page.goto(`${APP}/app/tests/${test.id}/sheets?pages=2`, { waitUntil: "networkidle2" });
@@ -122,6 +131,20 @@ try {
     const v = await page.evaluate(() => [...document.querySelectorAll("option")].find((o) => o.textContent === "Katherine Johnson")?.value);
     if (v) await page.select("select", v);
   } });
+  // a brand-new teacher sees the getting-started checklist
+  const fresh = `e2e-shots-new-${Date.now()}@gradelens.test`;
+  const nu = await (await fetch(`${URL_}/auth/v1/admin/users`, { method: "POST", headers: H, body: JSON.stringify({ email: fresh, password, email_confirm: true, user_metadata: { full_name: "New Teacher" } }) })).json();
+  const jar2 = new Map();
+  const sb2 = createServerClient(URL_, PUB, { cookies: { getAll: () => [...jar2].map(([name, value]) => ({ name, value })), setAll: (l) => l.forEach((c) => jar2.set(c.name, c.value)) } });
+  await sb2.auth.signInWithPassword({ email: fresh, password });
+  const p2 = await browser.newPage();
+  await p2.setViewport(desktop);
+  await p2.setCookie(...[...jar2].map(([name, value]) => ({ name, value, domain: "localhost", path: "/", sameSite: "Lax" })));
+  await p2.goto(`${APP}/app`, { waitUntil: "networkidle2" });
+  await p2.waitForFunction(() => document.body.innerText.includes("Getting started"), { timeout: 60000 });
+  await p2.screenshot({ path: `${out}/09a-first-visit.png`, fullPage: true });
+  shots.splice(shots.findIndex((x) => x.file === "09-dashboard"), 0, { file: "09a-first-visit", title: "Teacher: first visit, with the getting-started checklist" });
+  await fetch(`${URL_}/auth/v1/admin/users/${nu.id}`, { method: "DELETE", headers: H });
 } finally {
   await browser.close();
   if (classId) {

@@ -121,6 +121,64 @@ try {
   const [s2] = await rest(`submissions?id=eq.${sub.id}&select=total,status`);
   log(`script total now ${s2.total} (${s2.status})`);
 
+  // ---- exports, gradebook, settings
+  const csv = await page.evaluate(async (u) => (await fetch(u)).text(), `${APP}/app/tests/${test.id}/export?kind=marks`);
+  check("marks export downloads as CSV with every question", csv.includes("Student,Code,Q1") && csv.includes("Grace Hopper") && csv.includes("Q35"), `${csv.split("\n").length} lines`);
+  const answersCsv = await page.evaluate(async (u) => (await fetch(u)).text(), `${APP}/app/tests/${test.id}/export?kind=answers`);
+  check("every-answer export has one row per answer", answersCsv.split("\n").filter((l) => l.startsWith("Grace Hopper")).length === 35);
+  await page.goto(`${APP}/app/classes/${classId}/gradebook`, { waitUntil: "domcontentloaded" });
+  await waitText("Class average", 60000);
+  check("gradebook shows the student and the class average", await page.evaluate(() => document.body.innerText.includes("Grace Hopper") && document.body.innerText.includes("Class average")));
+  await page.goto(`${APP}/app/settings`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("input[name=display_name]", { timeout: 60000 });
+  await new Promise((r) => setTimeout(r, 800)); // let the streamed form settle
+  await page.evaluate(() => {
+    const el = document.querySelector("input[name=display_name]");
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, "Ms Offline");
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save")?.click());
+  await waitText("Saved.", 30000);
+  const savedProfile = await rest(`teacher_profiles?user_id=eq.${created.id}&select=display_name`);
+  check("teacher can save the name shown to students", savedProfile[0]?.display_name === "Ms Offline", `stored: ${JSON.stringify(savedProfile)}`);
+
+  // ---- return results: approve the whole script, release, student opens their page and asks for a re-check
+  const { data: pendingRows } = await sb.from("question_results").select("id").eq("submission_id", sub.id).eq("approved", false);
+  for (const r of pendingRows ?? []) await sb.rpc("review_mark", { qid: r.id, act: "approve" });
+  await page.goto(`${APP}/app/tests/${test.id}`, { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(() => [...document.querySelectorAll("button")].some((b) => b.textContent.trim() === "Release results"), { timeout: 60000 });
+  await page.waitForNetworkIdle({ idleTime: 800, timeout: 30000 }).catch(() => {}); // interactive (hydrated) before clicking
+  for (let i = 0; i < 3 && !(await page.evaluate(() => document.body.innerText.includes("Released to students"))); i++) {
+    await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Release results")?.click());
+    await page.waitForFunction(() => document.body.innerText.includes("Released to students"), { timeout: 10000 }).catch(() => {});
+  }
+  await waitText("Released to students", 5000);
+  check("teacher releases results from the test page", true);
+  const [{ result_token: token }] = await rest(`submissions?id=eq.${sub.id}&select=result_token`);
+  const student = await browser.createBrowserContext();
+  const sp = await student.newPage();
+  await sp.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  await sp.goto(`${APP}/r/${token}`, { waitUntil: "domcontentloaded" });
+  await sp.waitForFunction(() => document.body.innerText.includes("Your marks"), { timeout: 60000 });
+  const studentView = await sp.evaluate(() => document.body.innerText);
+  check("the student sees their approved marks, feedback and the teacher's name (no sign-in)", studentView.includes("What to work on") && studentView.includes("Ms Offline") && studentView.includes("Q21"));
+  await sp.screenshot({ path: `${out}/07-student-results.png`, fullPage: true });
+  await sp.select("form select", "21");
+  await sp.type("form textarea", "I explained labelled data, please check Q21 again.");
+  await sp.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.includes("Send to my teacher"))?.click());
+  await sp.waitForFunction(() => document.body.innerText.includes("Sent."), { timeout: 30000 });
+  const [reqRow] = await rest(`review_requests?submission_id=eq.${sub.id}&select=id,status,q`);
+  check("the student's re-check request reaches the teacher", reqRow?.q === 21 && reqRow?.status === "open");
+  await page.goto(`${APP}/app/tests/${test.id}/review?s=${sub.id}&q=21`, { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(() => document.body.innerText.includes("asked you to look again"), { timeout: 60000 });
+  await page.type("section[aria-label='Marking sheet'] textarea", "Checked: the mark stands, you needed the mapping from inputs to outputs.");
+  await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Mark as answered")?.click());
+  await waitText("Request answered.", 30000);
+  await sp.reload({ waitUntil: "domcontentloaded" });
+  await sp.waitForFunction(() => document.body.innerText.includes("answered"), { timeout: 30000 });
+  check("the teacher's reply appears on the student's page", await sp.evaluate(() => document.body.innerText.includes("the mark stands")));
+  await student.close();
+
   // ---- insights
   t = Date.now();
   await page.goto(`${APP}/app/tests/${test.id}/insights`, { waitUntil: "domcontentloaded" });

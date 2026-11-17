@@ -53,7 +53,7 @@ async function SignInForms({ searchParams }: { searchParams: PageProps<"/sign-in
           </button>
         </form>
         <p className="mt-2 text-[0.9rem] text-muted-foreground">
-          No account needed. A guest workspace is deleted after 7 days, and grading is limited to keep the service free.
+          No sign-up. A guest workspace is deleted after 7 days.
         </p>
       </div>
     </div>

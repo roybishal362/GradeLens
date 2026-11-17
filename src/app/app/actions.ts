@@ -227,3 +227,74 @@ export async function deleteClass(classId: string, confirmName: string): Promise
   if (error) return { ok: false, error: "Couldn't delete the class. Try again." };
   redirect("/app");
 }
+
+// ---------------------------------------------------------------- returning results to students
+/** Release (or withdraw) results: students then see their approved marks and feedback on their private page. */
+export async function setResultsReleased(testId: string, released: boolean): Promise<ActionResult> {
+  await requireTeacher();
+  const db = await userDb();
+  const { error } = await db.from("tests").update({ results_released: released, released_at: released ? new Date().toISOString() : null }).eq("id", testId);
+  if (error) return { ok: false, error: "Couldn't change that. Try again." };
+  revalidatePath(`/app/tests/${testId}`);
+  return { ok: true, message: released ? "Results released. Students can open their links." : "Results hidden from students again." };
+}
+
+/** Optional letter grades for this test (percent thresholds). Empty list = no letter grades. */
+export async function saveGradeBoundaries(testId: string, raw: { label: string; min: number }[]): Promise<ActionResult> {
+  await requireTeacher();
+  const { BoundariesSchema } = await import("@/lib/results");
+  const parsed = BoundariesSchema.safeParse(raw.filter((b) => b.label.trim()));
+  if (!parsed.success) return { ok: false, error: "Each grade needs a short name and a minimum between 0 and 100, and names must differ." };
+  const db = await userDb();
+  const { error } = await db.from("tests").update({ grade_boundaries: parsed.data.length ? parsed.data : null }).eq("id", testId);
+  if (error) return { ok: false, error: "Couldn't save the grades. Try again." };
+  revalidatePath(`/app/tests/${testId}`);
+  return { ok: true, message: parsed.data.length ? "Letter grades saved." : "Letter grades removed." };
+}
+
+/** Answer a student's re-check request (the mark itself is changed in the review screen, which is audited). */
+export async function resolveRequest(requestId: string, response: string): Promise<ActionResult> {
+  await requireTeacher();
+  const db = await userDb();
+  const { data, error } = await db.from("review_requests")
+    .update({ status: "resolved", response: response.trim().slice(0, 1000) || null, resolved_at: new Date().toISOString() })
+    .eq("id", requestId).select("submission_id").maybeSingle();
+  if (error || !data) return { ok: false, error: "Couldn't update that request." };
+  revalidatePath("/app");
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------- settings
+export async function saveProfile(input: { displayName: string; school: string }): Promise<ActionResult> {
+  const t = await requireTeacher();
+  const display_name = String(input?.displayName ?? "").trim().slice(0, 80) || null;
+  const school = String(input?.school ?? "").trim().slice(0, 120) || null;
+  const db = await userDb();
+  const { error } = await db.from("teacher_profiles").upsert({ user_id: t.id, display_name, school, updated_at: new Date().toISOString() });
+  if (error) return { ok: false, error: "Couldn't save. Try again." };
+  revalidatePath("/app", "layout");
+  return { ok: true, message: "Saved." };
+}
+
+/** Delete the account and everything in it: every class's scanned pages first, then the account (rows cascade). */
+export async function deleteAccount(confirm: string): Promise<ActionResult> {
+  const t = await requireTeacher();
+  if (confirm.trim().toLowerCase() !== "delete") return { ok: false, error: 'Type "delete" to confirm.' };
+  const db = await userDb();
+  const { data: classes } = await db.from("classes").select("id").eq("owner_id", t.id);
+  const storage = adminDb().storage.from("pages");
+  const walk = async (prefix: string): Promise<void> => {
+    const { data } = await storage.list(prefix, { limit: 1000 });
+    const files: string[] = [];
+    for (const it of data ?? []) {
+      if (it.id === null) await walk(`${prefix}/${it.name}`);
+      else files.push(`${prefix}/${it.name}`);
+    }
+    for (let i = 0; i < files.length; i += 100) await storage.remove(files.slice(i, i + 100));
+  };
+  for (const c of classes ?? []) await walk(c.id);
+  const { error } = await adminDb().auth.admin.deleteUser(t.id); // after the session check above: only your own account
+  if (error) return { ok: false, error: "Couldn't delete the account. Try again." };
+  await db.auth.signOut();
+  redirect("/?deleted=1");
+}

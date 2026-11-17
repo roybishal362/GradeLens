@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { Eye, EyeOff, Keyboard, MessageSquareWarning } from "lucide-react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
+import { resolveRequest } from "@/app/app/actions";
 import { fmtMark, Mark, RiskLabel } from "@/components/marks";
 import type { PageRow, QuestionResultRow } from "@/lib/db/types";
 import { evidenceLines, pageOfLine } from "@/lib/grading/evidence";
@@ -22,14 +24,32 @@ type Props = {
   basePath: string; // e.g. /app/tests/<id>/review or /sample/review
   scripts: ScriptSummary[];
   current: { id: string; name: string; code: string; warnings: string[]; results: QuestionResultRow[]; pages: (PageRow & { url: string })[] } | null;
+  commentBank?: Record<number, string[]>; // notes this teacher already wrote for each question in this test
+  requests?: { id: string; q: number; message: string }[]; // students' open re-check requests on this script
+  initialQ?: number;
 };
+
+/** A boolean remembered on this device (e.g. "hide names"), safe to render on the server. */
+function useLocalFlag(key: string): [boolean, (v: boolean) => void] {
+  const value = useSyncExternalStore(
+    (cb) => { window.addEventListener("storage", cb); window.addEventListener("gl-flag", cb); return () => { window.removeEventListener("storage", cb); window.removeEventListener("gl-flag", cb); }; },
+    () => localStorage.getItem(key) === "1",
+    () => false,
+  );
+  return [value, (v) => { localStorage.setItem(key, v ? "1" : "0"); window.dispatchEvent(new Event("gl-flag")); }];
+}
+
+const SHORTCUTS: [string, string][] = [
+  ["A", "Approve this mark"], ["0-9", "Set the mark"], ["H", "Add or remove a half mark"],
+  ["J / K", "Next / previous question"], ["N / P", "Next / previous script"], ["?", "Show or hide this list"],
+];
 
 const markOf = (r: QuestionResultRow) => (r.teacher_score ?? r.ai_score);
 
 /** Plain-language explanations of the verifier's flags (the teacher sees why an answer waits for them). */
 function explain(flag: string): string {
-  if (flag.startsWith("graders disagree")) return `The two AI graders disagree ${flag.slice(16)}.`;
-  if (flag.startsWith("unverified evidence")) return "A grader quoted words that aren't in the student's answer, so its points aren't trusted.";
+  if (flag.startsWith("graders disagree")) return `The two markers disagree ${flag.slice(16)}.`;
+  if (flag.startsWith("unverified evidence")) return "One marker quoted words the student didn't write, so check its points.";
   if (flag.startsWith("low reading confidence")) return `The handwriting was hard to read ${flag.slice(22)}. Check the transcription against the page.`;
   if (flag.startsWith("manipulation attempt")) return "The answer contains instructions aimed at the grader (e.g. \"give full marks\"). It was marked on content only.";
   if (flag.startsWith("no answer found")) return "No answer was found for this question. Confirm it was left blank (check the page in case it was written somewhere else).";
@@ -48,6 +68,8 @@ export function ReviewWorkspace(props: Props) {
   // Open where the teacher's attention is most useful: a flagged answer that has writing, then any flagged one.
   const [sel, setSel] = useState(() => {
     const rs = current?.results ?? [];
+    const asked = props.initialQ ? rs.findIndex((r) => r.q === props.initialQ) : -1;
+    if (asked >= 0) return asked;
     const answered = rs.findIndex((r) => !r.approved && r.risk !== "low" && r.answer?.text?.trim());
     const flagged = rs.findIndex((r) => !r.approved && r.risk !== "low");
     return answered >= 0 ? answered : flagged >= 0 ? flagged : 0;
@@ -56,6 +78,10 @@ export function ReviewWorkspace(props: Props) {
   const [tab, setTab] = useState<"queue" | "page" | "marks">("marks");
   const [note, setNote] = useState("");
   const [toast, setToast] = useState<string | null>(null);
+  const [anon, setAnon] = useLocalFlag("gl-hide-names");
+  const [showKeys, setShowKeys] = useState(false);
+  const [openRequests, setOpenRequests] = useState(props.requests ?? []);
+  const [reply, setReply] = useState("");
   // Decisions save in the background and never lock the buttons: a fast reviewer can keep going while the server
   // confirms. Only the bulk actions wait for their own result.
   const [saving, setSaving] = useState(0);
@@ -77,7 +103,7 @@ export function ReviewWorkspace(props: Props) {
   const decide = useCallback((act: "approve" | "adjust" | "unapprove", score?: number) => {
     if (!r) return;
     const next = results.map((x) => (x.id === r.id
-      ? { ...x, approved: act !== "unapprove", teacher_score: act === "adjust" ? score! : x.teacher_score, teacher_note: act === "adjust" && note ? note : x.teacher_note }
+      ? { ...x, approved: act !== "unapprove", teacher_score: act === "adjust" ? score! : x.teacher_score, teacher_note: act !== "unapprove" && note.trim() ? note.trim() : x.teacher_note }
       : x));
     setResults(next);
     if (act !== "unapprove") {
@@ -88,7 +114,7 @@ export function ReviewWorkspace(props: Props) {
     const before = r;
     void (async () => {
       setSaving((n) => n + 1);
-      const { error } = await browserDb().rpc("review_mark", { qid: before.id, act, score: act === "adjust" ? score : null, note: act === "adjust" && note ? note : null });
+      const { error } = await browserDb().rpc("review_mark", { qid: before.id, act, score: act === "adjust" ? score : null, note: act !== "unapprove" && note.trim() ? note.trim() : null });
       setSaving((n) => n - 1);
       if (error) {
         setResults((rs) => rs.map((x) => (x.id === before.id ? before : x))); // undo only this decision
@@ -123,6 +149,8 @@ export function ReviewWorkspace(props: Props) {
       const t = e.target as HTMLElement;
       if (t.closest("input, textarea, select, [contenteditable]") || e.metaKey || e.ctrlKey || e.altKey || !r) return;
       const k = e.key.toLowerCase();
+      if (e.key === "?") { setShowKeys((v) => !v); e.preventDefault(); return; }
+      if (k === "escape") { setShowKeys(false); return; }
       if (k === "j") setSel((s) => Math.min(results.length - 1, s + 1));
       else if (k === "k") setSel((s) => Math.max(0, s - 1));
       else if (k === "a") decide("approve");
@@ -146,7 +174,7 @@ export function ReviewWorkspace(props: Props) {
     <div className="flex min-h-0 flex-1 flex-col">
       {mode === "sample" && (
         <p className="border-b border-ruling bg-highlighter/40 px-5 py-2 text-center text-[0.95rem]">
-          Sample class: real scripts from a public dataset, marked by GradeLens. Try approving or changing marks: nothing here is saved.
+          Sample class: real exam scripts from a public dataset. Try marking them; changes here aren&apos;t saved.
         </p>
       )}
       {/* mobile: the three panes become tabs */}
@@ -164,6 +192,15 @@ export function ReviewWorkspace(props: Props) {
         <aside aria-label="Scripts" className={`${tab === "queue" ? "block" : "hidden"} border-r border-ruling bg-white lg:block lg:overflow-y-auto`}>
           <div className="border-b border-ruling p-3">
             <p className="text-[0.9rem] text-muted-foreground">{props.title}</p>
+            <div className="mt-2 flex gap-1.5">
+              <button type="button" onClick={() => setAnon(!anon)} aria-pressed={anon} title="Anonymous marking: show codes instead of names"
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-ruling px-2 py-1 text-[0.85rem] hover:bg-secondary aria-pressed:bg-secondary">
+                {anon ? <EyeOff aria-hidden className="size-3.5" /> : <Eye aria-hidden className="size-3.5" />} {anon ? "Names hidden" : "Hide names"}
+              </button>
+              <button type="button" onClick={() => setShowKeys(true)} title="Keyboard shortcuts (?)" className="inline-flex items-center gap-1.5 rounded-md border border-ruling px-2 py-1 text-[0.85rem] hover:bg-secondary">
+                <Keyboard aria-hidden className="size-3.5" /> Keys
+              </button>
+            </div>
             <button type="button" disabled={bulkBusy} onClick={() => approveReady("test")}
               className="mt-2 w-full rounded-md border border-redpen px-3 py-1.5 text-[0.95rem] font-semibold text-redpen hover:bg-redpen hover:text-white disabled:opacity-50">
               Approve every ready mark
@@ -175,7 +212,7 @@ export function ReviewWorkspace(props: Props) {
                 <Link href={`${props.basePath}?s=${s.id}`} aria-current={s.id === current?.id ? "page" : undefined}
                   className="flex items-center justify-between gap-2 border-b border-ruling px-3 py-2 hover:bg-secondary/60 aria-[current=page]:bg-secondary">
                   <span className="min-w-0">
-                    <span className="block truncate font-semibold">{s.name}</span>
+                    <span className="block truncate font-semibold">{anon ? s.code : s.name}</span>
                     {s.status === "approved" ? <span className="text-[0.85rem] font-semibold text-ok">✓ Approved</span> : <RiskLabel risk={s.risk} className="text-[0.85rem]" />}
                   </span>
                   {s.total !== null && <Mark value={Number(s.total)} approved={s.status === "approved"} className="text-xl" />}
@@ -196,7 +233,7 @@ export function ReviewWorkspace(props: Props) {
             <>
               <header className="border-b border-ruling px-4 py-3">
                 <div className="flex items-baseline justify-between gap-3">
-                  <h1 className="text-xl font-semibold">{current.name} <span className="text-[0.9rem] font-normal text-muted-foreground">{current.code}</span></h1>
+                  <h1 className="text-xl font-semibold">{anon ? current.code : <>{current.name} <span className="text-[0.9rem] font-normal text-muted-foreground">{current.code}</span></>}</h1>
                   <Mark value={total} max={max} approved={pendingCount === 0} className="text-3xl" />
                 </div>
                 {current.warnings.map((w) => <p key={w} className="mt-1 text-[0.9rem] font-semibold text-check">⚠ {w}</p>)}
@@ -242,6 +279,22 @@ export function ReviewWorkspace(props: Props) {
                       </span>
                     )}
                   </div>
+                  {openRequests.filter((x) => x.q === r.q).map((req) => (
+                    <div key={req.id} className="mt-3 rounded-md border border-check/50 bg-check/5 p-3">
+                      <p className="flex items-center gap-1.5 text-[0.9rem] font-semibold"><MessageSquareWarning aria-hidden className="size-4 text-check" /> The student asked you to look again</p>
+                      <p className="mt-1 text-[0.95rem]">&ldquo;{req.message}&rdquo;</p>
+                      <textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={2} maxLength={1000} placeholder="Reply (optional). The student sees it on their results page."
+                        className="mt-2 w-full rounded-md border border-input bg-white px-3 py-1.5 text-[0.95rem]" />
+                      <button type="button" className="mt-1.5 rounded-md border border-ink/25 bg-white px-3 py-1 text-[0.9rem] font-semibold hover:bg-secondary"
+                        onClick={async () => {
+                          const res = await resolveRequest(req.id, reply);
+                          if (!res.ok) { flash(res.error); return; }
+                          setOpenRequests((rs) => rs.filter((x) => x.id !== req.id)); setReply(""); flash("Request answered.");
+                        }}>
+                        Mark as answered
+                      </button>
+                    </div>
+                  ))}
                   {r.flags.length > 0 && (
                     <ul className="mt-3 space-y-1 border-l-2 border-check pl-3 text-[0.95rem]">
                       {r.flags.map((f) => <li key={f}>{explain(f)}</li>)}
@@ -249,7 +302,7 @@ export function ReviewWorkspace(props: Props) {
                   )}
 
                   {/* what the student wrote */}
-                  <h3 className="mt-5 text-[0.9rem] font-semibold text-muted-foreground">What the student wrote (as GradeLens read it)</h3>
+                  <h3 className="mt-5 text-[0.9rem] font-semibold text-muted-foreground">Student&apos;s answer, as read from the page</h3>
                   {r.answer ? (
                     <Transcript text={rq.type === "mcq" ? r.answer.text : r.answer.text} quote={crit ? (r.grade_a?.criteria.find((c) => c.id === crit)?.evidenceQuote || r.grade_b?.criteria.find((c) => c.id === crit)?.evidenceQuote || "") : ""} />
                   ) : <p className="mt-1 italic text-muted-foreground">No answer found.</p>}
@@ -259,7 +312,7 @@ export function ReviewWorkspace(props: Props) {
                   {/* criteria */}
                   {rq.type !== "mcq" ? (
                     <>
-                      <h3 className="mt-5 text-[0.9rem] font-semibold text-muted-foreground">Mark scheme: select a line to see its evidence on the page</h3>
+                      <h3 className="mt-5 text-[0.9rem] font-semibold text-muted-foreground">Mark scheme · click a line to show its evidence</h3>
                       <ol className="mt-1 divide-y divide-ruling border-y border-ruling">
                         {rq.criteria.map((c) => {
                           const a = r.grade_a?.criteria.find((x) => x.id === c.id), b = r.grade_b?.criteria.find((x) => x.id === c.id);
@@ -274,7 +327,7 @@ export function ReviewWorkspace(props: Props) {
                                   <span className="text-[0.85rem] text-muted-foreground"> of {fmtMark(c.points)}</span>
                                 </span>
                                 <span className="col-span-2 text-[0.9rem] text-muted-foreground">
-                                  {a?.reason}{b && b.reason && b.points !== a?.points ? ` · Second grader: ${b.reason}` : ""}
+                                  {a?.reason}{b && b.reason && b.points !== a?.points ? ` · Second marker: ${b.reason}` : ""}
                                 </span>
                               </button>
                             </li>
@@ -282,14 +335,14 @@ export function ReviewWorkspace(props: Props) {
                         })}
                       </ol>
                       <p className="mt-2 text-[0.85rem] text-muted-foreground">
-                        Two independent AI graders: {fmtMark(r.score_a)} and {fmtMark(r.score_b)}; suggested {fmtMark(r.ai_score)} (their average, to the nearest half).
+                        Two markers gave {fmtMark(r.score_a)} and {fmtMark(r.score_b)}.
                       </p>
                       {(r.grade_a?.misconceptions.length || r.grade_b?.misconceptions.length) ? (
                         <p className="mt-2 text-[0.9rem]"><span className="font-semibold">Misconception: </span>{[...new Set([...(r.grade_a?.misconceptions ?? []), ...(r.grade_b?.misconceptions ?? [])])].join("; ")}</p>
                       ) : null}
                     </>
                   ) : (
-                    <p className="mt-4 text-[0.95rem]">Multiple choice, marked by code: correct option <strong>{rq.modelAnswer.trim().slice(0, 1).toUpperCase()}</strong>.</p>
+                    <p className="mt-4 text-[0.95rem]">Multiple choice. Correct option: <strong>{rq.modelAnswer.trim().slice(0, 1).toUpperCase()}</strong>.</p>
                   )}
 
                   {/* decide */}
@@ -305,9 +358,17 @@ export function ReviewWorkspace(props: Props) {
                       ))}
                     </div>
                     <label className="mt-3 grid gap-1">
-                      <span className="text-[0.85rem] text-muted-foreground">Note for the student (optional, saved when you change the mark)</span>
+                      <span className="text-[0.85rem] text-muted-foreground">Note for the student</span>
                       <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} className="rounded-md border border-input bg-white px-3 py-1.5" />
                     </label>
+                    {(props.commentBank?.[r.q] ?? []).filter((c) => c !== note).length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1.5" aria-label="Notes you used before on this question">
+                        {(props.commentBank?.[r.q] ?? []).filter((c) => c !== note).slice(0, 6).map((c) => (
+                          <button key={c} type="button" onClick={() => setNote(c)} title={c}
+                            className="max-w-full truncate rounded-full border border-ruling bg-white px-2.5 py-0.5 text-[0.8rem] hover:bg-secondary">{c.length > 48 ? `${c.slice(0, 47)}…` : c}</button>
+                        ))}
+                      </div>
+                    )}
                     <div className="mt-3 flex flex-wrap items-center gap-3">
                       {!r.approved ? (
                         <button type="button" onClick={() => decide("approve")} className="rounded-md bg-redpen px-5 py-2 font-semibold text-white hover:bg-[#b81f1f] disabled:opacity-50">
@@ -318,16 +379,29 @@ export function ReviewWorkspace(props: Props) {
                           Undo approval
                         </button>
                       )}
-                      <span className="text-[0.8rem] text-muted-foreground">Keys: A approve · 0–9 set · H half · J/K question · N/P script</span>
+                      <button type="button" onClick={() => setShowKeys(true)} className="text-[0.8rem] text-muted-foreground underline underline-offset-4">Keyboard shortcuts</button>
                     </div>
                   </div>
                 </article>
               )}
             </>
-          ) : <p className="p-6 text-muted-foreground">No marked scripts yet. They appear here as soon as GradeLens has marked them.</p>}
+          ) : <p className="p-6 text-muted-foreground">No marked scripts yet. They appear here as soon as they&apos;re marked.</p>}
         </section>
       </div>
       {toast && <p role="status" className="fixed bottom-5 left-1/2 -translate-x-1/2 rounded-md bg-ink px-4 py-2 text-white shadow-lg">{toast}</p>}
+      {showKeys && (
+        <div role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" className="fixed inset-0 z-50 grid place-items-center bg-ink/30 p-4" onClick={() => setShowKeys(false)}>
+          <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="font-semibold">Keyboard shortcuts</h2>
+            <dl className="mt-3 grid grid-cols-[5rem_1fr] gap-y-1.5 text-[0.95rem]">
+              {SHORTCUTS.map(([k, v]) => (
+                <Fragment key={k}><dt><kbd className="rounded border border-ruling bg-secondary px-1.5 py-0.5 font-mono text-[0.85rem]">{k}</kbd></dt><dd>{v}</dd></Fragment>
+              ))}
+            </dl>
+            <button type="button" onClick={() => setShowKeys(false)} className="mt-4 rounded-md border border-ink/20 px-3 py-1.5 font-semibold hover:bg-secondary">Close</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

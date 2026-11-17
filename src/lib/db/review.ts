@@ -11,6 +11,8 @@ export type ReviewData = {
   isSample: boolean;
   scripts: ReviewScript[];
   current: { script: ReviewScript; results: QuestionResultRow[]; pages: (PageRow & { url: string })[] } | null;
+  commentBank: Record<number, string[]>;
+  requests: { id: string; q: number; message: string }[];
 };
 
 const RANK = { high: 0, medium: 1, low: 2 } as const;
@@ -39,12 +41,22 @@ export async function loadReview(testId: string, submissionId?: string, client?:
       a.student.display_name.localeCompare(b.student.display_name, undefined, { numeric: true }));
 
   const script = scripts.find((s) => s.id === submissionId) ?? scripts[0];
-  if (!script) return { test, className: cls?.name ?? "", isSample: Boolean(cls?.is_sample), scripts, current: null };
+  if (!script) return { test, className: cls?.name ?? "", isSample: Boolean(cls?.is_sample), scripts, current: null, commentBank: {}, requests: [] };
 
-  const [{ data: results }, { data: pages }] = await Promise.all([
+  const [{ data: results }, { data: pages }, { data: notes }, { data: requests }] = await Promise.all([
     db.from("question_results").select(QR_COLS).eq("submission_id", script.id).order("q").returns<QuestionResultRow[]>(),
     db.from("pages").select("id,submission_id,page_no,storage_path,media_type,width,height").eq("submission_id", script.id).order("page_no").returns<PageRow[]>(),
+    // the teacher's own earlier notes on this test, offered again as one-click comments
+    db.from("question_results").select("q,teacher_note,approved_at,submissions!inner(test_id)").eq("submissions.test_id", testId).not("teacher_note", "is", null).order("approved_at", { ascending: false }).limit(500),
+    db.from("review_requests").select("id,q,message").eq("submission_id", script.id).eq("status", "open").order("created_at"),
   ]);
+  const commentBank: Record<number, string[]> = {};
+  for (const n of (notes ?? []) as { q: number; teacher_note: string }[]) {
+    const t = n.teacher_note.trim();
+    if (!t || t === "Mark from the dataset's teacher") continue;
+    const list = (commentBank[n.q] ??= []);
+    if (!list.includes(t) && list.length < 6) list.push(t);
+  }
   const stored = (pages ?? []).filter((p) => !p.storage_path.startsWith("/"));
   const signed = new Map<string, string>();
   if (stored.length) {
@@ -59,5 +71,7 @@ export async function loadReview(testId: string, submissionId?: string, client?:
       results: (results ?? []).map((r) => ({ ...r, max: Number(r.max), ai_score: Number(r.ai_score), score_a: Number(r.score_a), score_b: Number(r.score_b), teacher_score: r.teacher_score === null ? null : Number(r.teacher_score), reference_score: r.reference_score === null ? null : Number(r.reference_score) })),
       pages: (pages ?? []).map((p) => ({ ...p, url: p.storage_path.startsWith("/") ? p.storage_path : signed.get(p.storage_path) ?? "" })),
     },
+    commentBank,
+    requests: (requests ?? []) as { id: string; q: number; message: string }[],
   };
 }

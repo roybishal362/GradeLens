@@ -1,10 +1,4 @@
-import { AppHeader } from "@/components/app-header";
-
+/** The teacher area. (shell) pages get the sidebar; (focus) pages (review, printing) get a slim top bar. */
 export default function AppLayout({ children }: LayoutProps<"/app">) {
-  return (
-    <>
-      <AppHeader />
-      <div className="flex-1">{children}</div>
-    </>
-  );
+  return <>{children}</>;
 }

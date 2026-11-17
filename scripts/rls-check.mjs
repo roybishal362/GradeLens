@@ -130,6 +130,26 @@ try {
   const evLeft = (await db.query(`select count(*)::int as n from public.review_events where question_result_id = $1`, [qr])).rows[0].n;
   check("audit history cannot be deleted by the teacher", evLeft === 1, `status ${evDelete.status}`);
 
+  // 6b. Students' re-check requests and teacher profiles
+  const reqRow = (await db.query(`insert into public.review_requests (submission_id, q, message) values ($1, 1, 'please look again') returning id`, [sub])).rows[0].id;
+  const aReq = await api(`/rest/v1/review_requests?id=eq.${reqRow}&select=id,message`, { token: A.token });
+  const bReq = await api(`/rest/v1/review_requests?id=eq.${reqRow}&select=id`, { token: B.token });
+  const anonReq = await api(`/rest/v1/review_requests?id=eq.${reqRow}&select=id`);
+  check("only the class's teacher sees a student's re-check request", aReq.json?.length === 1 && bReq.json?.length === 0 && (anonReq.status >= 400 || anonReq.json?.length === 0));
+  const fakeReq = await api("/rest/v1/review_requests", { method: "POST", token: A.token, body: { submission_id: sub, q: 2, message: "made up" } });
+  const anonFake = await api("/rest/v1/review_requests", { method: "POST", body: { submission_id: sub, q: 2, message: "spam" } });
+  check("nobody can create requests directly (only through a student's private link)", fakeReq.status >= 400 && anonFake.status >= 400, `teacher ${fakeReq.status}, anon ${anonFake.status}`);
+  const editMsg = await api(`/rest/v1/review_requests?id=eq.${reqRow}`, { method: "PATCH", token: A.token, body: { message: "rewritten" } });
+  const answer = await api(`/rest/v1/review_requests?id=eq.${reqRow}`, { method: "PATCH", token: A.token, body: { status: "resolved", response: "checked" }, prefer: "return=representation" });
+  const bAnswer = await api(`/rest/v1/review_requests?id=eq.${reqRow}`, { method: "PATCH", token: B.token, body: { response: "hijack" } });
+  const reqNow = (await db.query(`select message, status, response from public.review_requests where id = $1`, [reqRow])).rows[0];
+  check("a teacher can answer a request but never rewrite the student's message", editMsg.status >= 400 && answer.status < 300 && reqNow.message === "please look again" && reqNow.status === "resolved" && reqNow.response === "checked",
+    `edit ${editMsg.status}, answer ${answer.status}, B ${bAnswer.status}`);
+  const prof = await api("/rest/v1/teacher_profiles", { method: "POST", token: A.token, body: { user_id: A.id, display_name: "Ms A" }, prefer: "return=representation" });
+  const bProf = await api(`/rest/v1/teacher_profiles?user_id=eq.${A.id}&select=display_name`, { token: B.token });
+  const fakeProf = await api("/rest/v1/teacher_profiles", { method: "POST", token: B.token, body: { user_id: A.id, display_name: "spoof" } });
+  check("teacher profiles are private and can't be written for someone else", prof.status === 201 && bProf.json?.length === 0 && fakeProf.status >= 400, `own ${prof.status}, spoof ${fakeProf.status}`);
+
   // 7. Server-only functions are not callable from the browser
   for (const [fn, body] of [["claim_submission", { sid: sub }], ["bump_usage", { b: "x", lim: 1 }], ["stale_guests", {}], ["refresh_submission", { sid: sub }]]) {
     const anon = await api(`/rest/v1/rpc/${fn}`, { method: "POST", body });

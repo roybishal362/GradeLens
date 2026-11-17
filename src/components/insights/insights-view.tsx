@@ -30,7 +30,7 @@ export function InsightsView({ data, mode, reviewHref }: { data: InsightsData; m
         </div>
         {!data.map ? (
           <div className="mt-4 margin-rule pl-4">
-            <p>GradeLens groups the wrong ideas the graders noted in each answer into misconceptions, and counts the students who have each one.</p>
+            <p>Find the wrong ideas behind lost marks, grouped and counted across the class.</p>
             {data.scripts > 0
               ? <div className="mt-3"><InsightButton kind="map" testId={data.test.id} sample={sample} label="Find what the class misunderstood" primary /></div>
               : <p className="mt-2 text-muted-foreground">Nothing to analyse until scripts are marked.</p>}
@@ -72,7 +72,7 @@ export function InsightsView({ data, mode, reviewHref }: { data: InsightsData; m
             })}
           </ol>
         )}
-        {data.map && <p className="mt-2 text-[0.85rem] text-muted-foreground">Grouped by {data.map.model ?? "AI"}; who has each misconception is checked against the graders&apos; notes by code.</p>}
+        {data.map && <p className="mt-2 text-[0.85rem] text-muted-foreground">Grouped automatically from the marked answers. Open a student&apos;s script to check.</p>}
       </section>
 
       {/* ------------------------------------------------ learning gain */}
@@ -120,8 +120,8 @@ export function InsightsView({ data, mode, reviewHref }: { data: InsightsData; m
       <section aria-labelledby="items">
         <h2 id="items" className="text-xl font-semibold">Question by question</h2>
         <p className="mt-1 max-w-3xl text-[0.95rem] text-muted-foreground">
-          Facility is the class&apos;s average share of the marks. Discrimination compares the top and bottom 27% of scripts: near 0 or
-          negative means the question doesn&apos;t separate stronger from weaker students (check its wording or mark scheme).
+          Facility: the class&apos;s average share of the marks. Discrimination: how well the question separates stronger and
+          weaker students (near 0 or negative is worth a look).
         </p>
         <div className="mt-3"><MarkSplitLegend /></div>
         <div className="mt-2 overflow-x-auto">
@@ -166,8 +166,7 @@ export function InsightsView({ data, mode, reviewHref }: { data: InsightsData; m
       <section aria-labelledby="fb">
         <h2 id="fb" className="text-xl font-semibold">Feedback for each student</h2>
         <p className="mt-1 max-w-3xl text-[0.95rem] text-muted-foreground">
-          Written from the mark scheme and the marks (no invented praise): what earned marks, and what was missing, in the mark
-          scheme&apos;s own words.
+          What earned marks and what was missing, in your mark scheme&apos;s words.
         </p>
         <ul className="mt-3 divide-y divide-ruling border-y border-ruling">
           {data.feedback.map((f) => (
@@ -229,7 +228,7 @@ function ReteachPlan({ plan, testId, sample }: { plan: InsightsData["reteach"][n
           <div className="mt-3"><InsightButton kind="retest" testId={testId} reteachId={plan.id} sample={sample} label="Create this re-test" primary /></div>
           <p className="mt-1 text-[0.85rem] text-muted-foreground">Creates a new test with a drafted mark scheme for you to check. When students take it, this page shows each student&apos;s before and after.</p>
         </div>
-        <p className="text-[0.8rem] text-muted-foreground">Drafted by {plan.model ?? "AI"}. Check every question and answer before using it in class.</p>
+        <p className="text-[0.8rem] text-muted-foreground">Drafted automatically. Check every question and answer before using it in class.</p>
       </div>
     </details>
   );

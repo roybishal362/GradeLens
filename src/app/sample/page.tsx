@@ -32,16 +32,14 @@ export default async function SamplePage() {
       <div className="mt-6 grid gap-6 md:grid-cols-[3fr_2fr]">
         <div className="space-y-3 text-[1.02rem]">
           <p>
-            These are <strong>real handwritten answer sheets</strong> from university students, published with the teacher&apos;s own
-            marks as an open dataset. GradeLens read each photographed script and suggested every mark from the mark scheme,
-            with the student&apos;s words as evidence.
+            <strong>Real handwritten exam scripts</strong> from university students, published with their teacher&apos;s marks as an
+            open dataset. GradeLens read each one and suggested every mark, with the student&apos;s words as evidence.
           </p>
           <p className="margin-rule pl-4">
             <span className="mark text-2xl" data-approved="true">Red pen</span> = decided by a teacher.{" "}
             <span className="mark text-2xl">Pencil</span> = suggested by GradeLens, waiting for review.
-            The first {approved.length} scripts carry the dataset teacher&apos;s real marks: GradeLens used them as examples of this
-            teacher&apos;s standard for the other {waiting.length}. On every answer you can compare the suggestion with the mark the real
-            teacher gave.
+            The first {approved.length} scripts carry the teacher&apos;s real marks, and GradeLens learned this teacher&apos;s standard from
+            them. On the other {waiting.length}, compare each suggestion with the mark the teacher gave.
           </p>
           <div className="flex flex-wrap gap-3 pt-2">
             <Link href="/sample/review" className="rounded-md bg-redpen px-5 py-2.5 font-semibold text-white hover:bg-[#b81f1f]">Review the scripts</Link>

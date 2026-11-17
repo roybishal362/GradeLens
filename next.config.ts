@@ -26,6 +26,7 @@ const nextConfig: NextConfig = {
       { source: "/:path*", headers: securityHeaders },
       // student upload pages: also keep them out of search engines and caches
       { source: "/u/:token", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }, { key: "Cache-Control", value: "no-store" }] },
+      { source: "/r/:token", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }, { key: "Cache-Control", value: "no-store" }] },
     ];
   },
 };

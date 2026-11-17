@@ -14,6 +14,7 @@ export function AppHeader({ sample = false }: { sample?: boolean }) {
           <Link href="/app" className="underline-offset-4 hover:underline">Your classes</Link>
           <Link href="/sample" className={`underline-offset-4 hover:underline ${sample ? "font-semibold" : ""}`}>Sample class</Link>
           <Link href="/transparency" className="underline-offset-4 hover:underline"><span className="sm:hidden">Accuracy</span><span className="hidden sm:inline">How accurate is it?</span></Link>
+          <Link href="/help" className="underline-offset-4 hover:underline">Help</Link>
         </nav>
         <div className="col-start-3 row-start-1 justify-self-end">
           <Suspense fallback={<span className="h-6 w-24" />}>

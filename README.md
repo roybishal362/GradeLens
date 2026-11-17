@@ -63,6 +63,15 @@ flowchart LR
 6. **Insights.** Item analysis (facility, discrimination), misconceptions grouped across the class (the AI proposes
    groups; membership is rebuilt by code), a re-teach plan + printable worksheet + re-test, and learning gain
    (Hake's normalised gain) once the re-test is marked. Student progress over time and a printable report.
+7. **Return results.** Results stay hidden until the teacher releases them. Each student gets a private page (link or
+   QR on a printed slip) with approved marks, the teacher's notes, feedback and their pages, and can ask for a re-check
+   on one question; requests appear on the test page and in the review screen, and the reply shows on the student's page.
+8. **Gradebook and exports.** Score statistics and distribution per test, optional letter grades, a class gradebook,
+   and CSV exports (marks per student, every answer with notes, gradebook) that open in Excel or Google Sheets.
+
+For teachers using it for the first time: a getting-started checklist, an example paper to try the flow, a Help page
+(set-up, photo tips, what the risk labels mean, shortcuts, exports, FAQ), anonymous marking, a comment bank of earlier
+notes, and Settings (name on reports, today's free usage, delete the account).
 
 ## Stack
 
