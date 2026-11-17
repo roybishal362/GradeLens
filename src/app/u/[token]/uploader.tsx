@@ -9,8 +9,13 @@ type Phase = { kind: "edit" } | { kind: "sending"; done: number; total: number }
 
 const MAX_PAGES = 12;
 
-export function Uploader({ token, students }: { token: string; students: { id: string; display_name: string }[] }) {
+export function Uploader({ token, students, questions = [] }: {
+  token: string; students: { id: string; display_name: string }[]; questions?: { q: number; marks: number; mcq: boolean }[];
+}) {
   const [studentId, setStudentId] = useState("");
+  const [mode, setMode] = useState<"photo" | "typed">("photo");
+  const [typed, setTyped] = useState<Record<number, string>>({});
+  const typedCount = Object.values(typed).filter((t) => t.trim()).length;
   const [pages, setPages] = useState<Page[]>([]);
   const [phase, setPhase] = useState<Phase>({ kind: "edit" });
   const [preparing, setPreparing] = useState(false);
@@ -66,14 +71,30 @@ export function Uploader({ token, students }: { token: string; students: { id: s
     }
   }
 
+  async function sendTyped() {
+    if (!studentId || !typedCount) return;
+    setPhase({ kind: "sending", done: 0, total: 1 });
+    try {
+      const res = await fetch("/api/upload/typed", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, studentId, answers: Object.entries(typed).filter(([, t]) => t.trim()).map(([q, text]) => ({ q: Number(q), text })) }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error ?? "Couldn't send your answers.");
+      setPhase({ kind: "sent" });
+    } catch (e) {
+      setPhase({ kind: "error", message: e instanceof Error ? e.message : "Something went wrong. Try again." });
+    }
+  }
+
   if (phase.kind === "sent") {
     const who = students.find((s) => s.id === studentId)?.display_name;
     return (
       <div className="mt-8 margin-rule pl-4" role="status">
         <p className="text-xl font-semibold text-ok">✓ Sent{who ? `, ${who}` : ""}.</p>
-        <p className="mt-2">Your teacher has your {pages.length} page{pages.length === 1 ? "" : "s"}. You can close this page.</p>
+        <p className="mt-2">{mode === "typed" ? `Your teacher has your ${typedCount} typed answer${typedCount === 1 ? "" : "s"}.` : `Your teacher has your ${pages.length} page${pages.length === 1 ? "" : "s"}.`} You can close this page.</p>
         <button type="button" className="mt-4 underline underline-offset-4" onClick={() => { setPages([]); setPhase({ kind: "edit" }); }}>
-          Sent the wrong pages? Send them again
+          Sent the wrong {mode === "typed" ? "answers" : "pages"}? Send them again
         </button>
       </div>
     );
@@ -90,6 +111,47 @@ export function Uploader({ token, students }: { token: string; students: { id: s
         </select>
         {!students.length && <span className="text-[0.95rem] text-flag">Your teacher hasn&apos;t added the class list yet.</span>}
       </label>
+
+      {questions.length > 0 && (
+        <div role="tablist" aria-label="How to hand in" className="grid grid-cols-2 rounded-md border border-ruling bg-white p-0.5">
+          {([["photo", "Photograph pages"], ["typed", "Type answers"]] as const).map(([m, label]) => (
+            <button key={m} type="button" role="tab" aria-selected={mode === m} onClick={() => setMode(m)} disabled={sending}
+              className={`rounded px-3 py-2 font-semibold ${mode === m ? "bg-ink text-white" : "text-ink/80"}`}>{label}</button>
+          ))}
+        </div>
+      )}
+
+      {mode === "typed" ? (
+        <div className="space-y-4">
+          <p className="text-[0.95rem] text-muted-foreground">Type each answer next to its question number. Leave any you didn&apos;t answer blank.</p>
+          <ol className="space-y-3">
+            {questions.map((q) => (
+              <li key={q.q}>
+                <label className="grid gap-1">
+                  <span className="font-semibold">Question {q.q} <span className="font-normal text-muted-foreground">({q.marks} mark{q.marks === 1 ? "" : "s"})</span></span>
+                  {q.mcq ? (
+                    <span className="flex gap-1.5" role="radiogroup" aria-label={`Answer to question ${q.q}`}>
+                      {["A", "B", "C", "D"].map((l) => (
+                        <button key={l} type="button" role="radio" aria-checked={typed[q.q] === l} onClick={() => setTyped((t) => ({ ...t, [q.q]: t[q.q] === l ? "" : l }))}
+                          className={`size-11 rounded-md border text-lg font-semibold ${typed[q.q] === l ? "border-ink bg-ink text-white" : "border-ruling bg-white"}`}>{l}</button>
+                      ))}
+                    </span>
+                  ) : (
+                    <textarea value={typed[q.q] ?? ""} onChange={(e) => setTyped((t) => ({ ...t, [q.q]: e.target.value }))} rows={3} maxLength={4000}
+                      className="rounded-md border border-input bg-white px-3 py-2 text-base" />
+                  )}
+                </label>
+              </li>
+            ))}
+          </ol>
+          {phase.kind === "error" && <p role="alert" className="rounded-md border border-flag/40 bg-flag/5 px-4 py-3">{phase.message}</p>}
+          <button type="button" disabled={!studentId || !typedCount || sending} onClick={sendTyped}
+            className="w-full rounded-md bg-ink px-4 py-4 text-lg font-semibold text-white disabled:opacity-40">
+            {sending ? "Sending…" : `Send ${typedCount || ""} answer${typedCount === 1 ? "" : "s"} to my teacher`}
+          </button>
+          {!studentId && <p className="text-[0.9rem] text-muted-foreground">Choose your name first.</p>}
+        </div>
+      ) : (<>
 
       <div>
         <p className="font-semibold">2. Photograph every page, in order</p>
@@ -148,6 +210,7 @@ export function Uploader({ token, students }: { token: string; students: { id: s
           <p className="mt-2 text-[0.9rem] text-muted-foreground">{!studentId ? "Choose your name first." : "Add at least one page."}</p>
         )}
       </div>
+      </>)}
     </div>
   );
 }

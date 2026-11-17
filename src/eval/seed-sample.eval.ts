@@ -75,7 +75,7 @@ describe("sample class", () => {
       .select("id").single<{ id: string }>();
     if (e1 || !cls) throw new Error(`class: ${e1?.message}`);
     const { data: test, error: e2 } = await db.from("tests")
-      .insert({ class_id: cls.id, title: "Data Science examination (20 multiple choice + 15 short answers)", rubric, rubric_status: "approved", uploads_open: false })
+      .insert({ class_id: cls.id, title: "Data Science examination (20 multiple choice + 15 short answers)", rubric, rubric_status: "approved", uploads_open: false, practice_open: true })
       .select("id").single<{ id: string }>();
     if (e2 || !test) throw new Error(`test: ${e2?.message}`);
 

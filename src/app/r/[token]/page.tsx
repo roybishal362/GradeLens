@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { fmtMark, Mark } from "@/components/marks";
+import { ReadAloud } from "@/components/read-aloud";
 import { toLite } from "@/lib/db/insights";
 import { studentResults } from "@/lib/db/student-results";
 import { markOf } from "@/lib/db/types";
@@ -46,7 +47,11 @@ async function View({ params }: Pick<PageProps<"/r/[token]">, "params">) {
         <Mark value={r.total} max={r.max} approved className="text-5xl" />
         <span className="pb-1 text-xl font-semibold">{Math.round(pct)}%</span>
         {grade && <span className="pb-1 text-xl font-semibold">Grade {grade}</span>}
+        <span className="ml-auto pb-1">
+          <ReadAloud label="Read my feedback" text={`${r.test}. You scored ${fmtMark(r.total)} out of ${fmtMark(r.max)}${grade ? `, grade ${grade}` : ""}. What went well: ${fb.strengths.slice(0, 5).join(". ") || "keep going"}. What to work on: ${fb.nextSteps.slice(0, 5).join(". ") || "nothing, full marks"}.`} />
+        </span>
       </div>
+      <p className="mt-2 text-[0.85rem] text-muted-foreground">You can share this page with a parent or carer: anyone with the link can see it.</p>
 
       <section className="mt-6 grid gap-6 sm:grid-cols-2">
         <div>

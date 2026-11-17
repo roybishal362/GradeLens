@@ -1,7 +1,7 @@
 import "server-only";
 
 import { pickExemplars, questionShifts, shifted, type Exemplar } from "@/lib/grading/calibration";
-import { gradeRead, readStudent, type ReadStep } from "@/lib/grading/pipeline";
+import { gradeRead, readStudent, type ReadStep, type StudentOutcome } from "@/lib/grading/pipeline";
 import type { Rubric } from "@/lib/grading/schemas";
 import { adminDb } from "@/lib/supabase/clients";
 
@@ -69,7 +69,9 @@ export async function runGradingJob(submissionId: string, opts: { regrade?: bool
   try {
     // ---- 1. read (or re-use the stored transcription)
     let read: ReadStep | null = null;
-    if (opts.regrade) {
+    const pages = opts.regrade ? [] : await loadPages(submissionId);
+    // typed scripts have no pages: their answers were stored as the transcription when they were sent
+    if (opts.regrade || !pages.length) {
       const { data: prev } = await db
         .from("grading_runs")
         .select("read_result,models,timings_ms")
@@ -82,9 +84,9 @@ export async function runGradingJob(submissionId: string, opts: { regrade?: bool
       if (prev?.read_result) read = { output: prev.read_result, model: prev.models?.reader ?? "stored", ms: 0, attempts: ["re-used the stored transcription"] };
     }
     if (!read) {
-      const pages = await loadPages(submissionId);
-      if (!pages.length) throw new UserFacing("No pages were uploaded for this script.");
-      read = await readStudent(pages, test.rubric, { deadline });
+      const toRead = pages.length ? pages : await loadPages(submissionId);
+      if (!toRead.length) throw new UserFacing("No pages or typed answers were found for this script.");
+      read = await readStudent(toRead, test.rubric, { deadline });
     }
     await db.from("grading_runs").update({ read_result: read.output }).eq("id", runId);
     await db.from("submissions").update({ status: "grading" }).eq("id", submissionId);
@@ -93,16 +95,7 @@ export async function runGradingJob(submissionId: string, opts: { regrade?: bool
     // question's learned shift: measured on held-out real scripts, see src/eval/mendeley.eval.ts)
     const standard = await teacherStandard(test.id, submissionId);
     const outcome = await gradeRead(read, test.rubric, { exemplars: standard.exemplars, deadline });
-    for (const q of outcome.questions) {
-      const s = standard.shifts.get(q.q);
-      const rq = test.rubric.questions.find((x) => x.q === q.q);
-      if (!s || !q.answer?.text?.trim() || rq?.type === "mcq") continue;
-      const moved = shifted(q.final, q.max, s.shift, true);
-      if (moved === q.final) continue;
-      q.flags = [...q.flags, `adjusted ${moved > q.final ? "+" : "−"}${Math.abs(moved - q.final)} to match your marking on this question (learned from ${s.n} answers you reviewed)`];
-      q.final = moved;
-    }
-    outcome.total = outcome.questions.reduce((sum, q) => sum + q.final, 0);
+    applyShifts(outcome, test.rubric, standard.shifts);
 
     // ---- 3. store: teacher decisions are never overwritten; everything else is replaced
     const { data: kept } = await db.from("question_results").select("q").eq("submission_id", submissionId).eq("approved", true);
@@ -117,6 +110,7 @@ export async function runGradingJob(submissionId: string, opts: { regrade?: bool
       if (insErr) throw new Error(`saving marks failed: ${insErr.message}`);
     }
     const warnings = [...outcome.warnings];
+    if (read.model === "typed") warnings.push("Typed answers (no photos).");
     const nameWarning = nameMismatch(outcome.studentName, sub.students.display_name);
     if (nameWarning) warnings.unshift(nameWarning);
     if (outcome.imageQuality !== "good") warnings.push(`Photo quality: ${outcome.imageQuality.replace("_", " ")}. Check the reading carefully.`);
@@ -158,13 +152,13 @@ async function loadPages(submissionId: string) {
  * the graders' prompt, and per-question shifts. Shifts compare the teacher's mark with GradeLens' RAW suggestion (the
  * two graders' average), never with an already-shifted one, so adjustments can't compound.
  */
-async function teacherStandard(testId: string, exceptSubmission: string): Promise<{ exemplars: Exemplar[]; shifts: ReturnType<typeof questionShifts> }> {
+export async function teacherStandard(testId: string, exceptSubmission: string | null): Promise<{ exemplars: Exemplar[]; shifts: ReturnType<typeof questionShifts> }> {
   const { data } = await adminDb()
     .from("question_results")
     .select("q,max,answer,score_a,score_b,ai_score,teacher_score,submissions!inner(test_id)")
     .eq("submissions.test_id", testId)
     .eq("approved", true)
-    .neq("submission_id", exceptSubmission)
+    .neq("submission_id", exceptSubmission ?? "00000000-0000-0000-0000-000000000000")
     .limit(2000);
   type Row = { q: number; max: number; answer: { text?: string } | null; score_a: number; score_b: number; ai_score: number; teacher_score: number | null };
   const rows = (data ?? []) as Row[];
@@ -174,6 +168,20 @@ async function teacherStandard(testId: string, exceptSubmission: string): Promis
     exemplars: pickExemplars(answered.map((r) => ({ q: r.q, answer: r.answer!.text!, score: Number(r.teacher_score ?? r.ai_score), aiScore: raw(r) })), 4),
     shifts: questionShifts(answered.map((r) => ({ q: r.q, ai: raw(r), teacher: Number(r.teacher_score ?? r.ai_score) }))),
   };
+}
+
+/** Move each written answer's suggestion by its question's learned shift (never multiple choice, never a blank). */
+export function applyShifts(outcome: StudentOutcome, rubric: Rubric, shifts: ReturnType<typeof questionShifts>) {
+  for (const q of outcome.questions) {
+    const s = shifts.get(q.q);
+    const rq = rubric.questions.find((x) => x.q === q.q);
+    if (!s || !q.answer?.text?.trim() || rq?.type === "mcq") continue;
+    const moved = shifted(q.final, q.max, s.shift, true);
+    if (moved === q.final) continue;
+    q.flags = [...q.flags, `adjusted ${moved > q.final ? "+" : "−"}${Math.abs(moved - q.final)} to match your marking on this question (learned from ${s.n} answers you reviewed)`];
+    q.final = moved;
+  }
+  outcome.total = outcome.questions.reduce((sum, q) => sum + q.final, 0);
 }
 
 /** "The name on the script doesn't match": catches a mixed-up upload before marks reach the wrong student. */

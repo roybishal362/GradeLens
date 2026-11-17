@@ -69,6 +69,13 @@ flowchart LR
 8. **Gradebook and exports.** Score statistics and distribution per test, optional letter grades, a class gradebook,
    and CSV exports (marks per student, every answer with notes, gradebook) that open in Excel or Google Sheets.
 
+9. **Practice for students (and tutors, self-learners).** A practice link gives instant feedback on any question,
+   typed or photographed (photos are not stored): each criterion met or missed with the student's own words quoted,
+   what to watch out for, and the model answer. It never counts as a grade; the teacher sees attempts and the most
+   common mistakes. The public sample class has practice open, so anyone can try it without signing up.
+10. **Accessibility.** Students can type answers instead of photographing them (no camera, poor light, or typing as
+    an access arrangement), and results and practice feedback can be read aloud by the browser.
+
 For teachers using it for the first time: a getting-started checklist, an example paper to try the flow, a Help page
 (set-up, photo tips, what the risk labels mean, shortcuts, exports, FAQ), anonymous marking, a comment bank of earlier
 notes, and Settings (name on reports, today's free usage, delete the account).

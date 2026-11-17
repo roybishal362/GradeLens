@@ -26,3 +26,14 @@ export async function uploadLinkFor(testId: string): Promise<{ url: string; qrSv
   const qrSvg = await QRCode.toString(url, { type: "svg", margin: 1, errorCorrectionLevel: "M", color: { dark: "#1c2541", light: "#ffffff" } });
   return { url, qrSvg };
 }
+
+/** The practice link for a test, for its owner only (ownership via RLS first; the token column is server-only). */
+export async function practiceLinkFor(testId: string): Promise<{ url: string; qrSvg: string } | null> {
+  const db = await userDb();
+  const { data: owned } = await db.from("tests").select("id").eq("id", testId).maybeSingle();
+  if (!owned) return null;
+  const { data } = await adminDb().from("tests").select("practice_token").eq("id", testId).single<{ practice_token: string }>();
+  if (!data) return null;
+  const url = `${await siteOrigin()}/p/${data.practice_token}`;
+  return { url, qrSvg: await QRCode.toString(url, { type: "svg", margin: 1, errorCorrectionLevel: "M", color: { dark: "#1c2541", light: "#ffffff" } }) };
+}

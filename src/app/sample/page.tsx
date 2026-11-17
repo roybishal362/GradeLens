@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { DatasetAttribution } from "@/components/attribution";
 import { Mark, RiskLabel } from "@/components/marks";
-import { sampleReview } from "@/lib/db/sample";
+import { samplePracticePath, sampleReview } from "@/lib/db/sample";
 
 export const metadata: Metadata = {
   title: "Sample class",
@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default async function SamplePage() {
-  const data = await sampleReview();
+  const [data, practice] = await Promise.all([sampleReview(), samplePracticePath()]);
   if (!data) {
     return (
       <main className="mx-auto w-full max-w-3xl px-5 py-12">
@@ -44,6 +44,7 @@ export default async function SamplePage() {
           <div className="flex flex-wrap gap-3 pt-2">
             <Link href="/sample/review" className="rounded-md bg-redpen px-5 py-2.5 font-semibold text-white hover:bg-[#b81f1f]">Review the scripts</Link>
             <Link href="/sample/insights" className="rounded-md border border-ink/25 bg-white px-5 py-2.5 font-semibold hover:bg-secondary">What the class misunderstood</Link>
+            {practice && <Link href={practice} className="rounded-md border border-ink/25 bg-white px-5 py-2.5 font-semibold hover:bg-secondary">Answer a question yourself</Link>}
             <Link href="/transparency" className="px-1 py-2.5 font-semibold underline underline-offset-4">How accurate is it?</Link>
           </div>
         </div>

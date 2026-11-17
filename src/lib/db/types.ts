@@ -8,6 +8,7 @@ export type TestRow = {
   id: string; class_id: string; title: string; rubric: Rubric; rubric_status: "draft" | "approved";
   uploads_open: boolean; created_at: string; parent_test_id: string | null;
   results_released: boolean; released_at: string | null; grade_boundaries: { label: string; min: number }[] | null;
+  practice_open: boolean;
 };
 export type StudentRow = { id: string; class_id: string; display_name: string; anon_code: string; created_at: string };
 export type SubmissionRow = {
@@ -31,7 +32,7 @@ export type ReviewEventRow = {
 export type InsightRow = { id: string; test_id: string; kind: "misconceptions" | "reteach" | "retest"; payload: unknown; model: string | null; created_at: string };
 
 // Explicit column lists: never `select *` on tests (the upload token is not readable by API roles; see migration 0002).
-export const TEST_COLS = "id,class_id,title,rubric,rubric_status,uploads_open,created_at,parent_test_id,results_released,released_at,grade_boundaries";
+export const TEST_COLS = "id,class_id,title,rubric,rubric_status,uploads_open,created_at,parent_test_id,results_released,released_at,grade_boundaries,practice_open";
 export const SUB_COLS = "id,test_id,student_id,status,total,max_total,risk,created_at,updated_at,source,attempts,error,warnings,result_token";
 export const QR_COLS =
   "id,submission_id,q,max,score_a,score_b,ai_score,risk,flags,answer,grade_a,grade_b,teacher_score,teacher_note,approved,approved_at,reference_score";

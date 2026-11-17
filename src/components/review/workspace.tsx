@@ -435,7 +435,7 @@ function PageView({ pages, result, criterion, zoom, onZoom }: {
     first?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [page, criterion, result.id, zoom]);
 
-  if (!shown) return <p className="p-6 text-muted-foreground">No page images for this script.</p>;
+  if (!shown) return <p className="p-6 text-muted-foreground">Typed answers: there are no page images for this script. The answer is shown on the right.</p>;
   return (
     <div className="p-3">
       <div className="mb-2 flex flex-wrap items-center gap-2 text-[0.9rem]">

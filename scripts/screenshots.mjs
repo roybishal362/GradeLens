@@ -100,6 +100,10 @@ try {
   await shot("07-transparency", "How accurate is it? (measured on real exams) and where student work goes", "/transparency");
   await shot("08-sign-in", "Sign in (Google or guest)", "/sign-in");
   await shot("08b-help", "Help: getting started, photos, reviewing, results, exports, questions", "/help");
+  {
+    const [{ practice_token: sampleToken }] = await rest(`tests?select=practice_token,classes!inner(is_sample)&classes.is_sample=is.true&limit=1`);
+    await shot("08c-practice", "Practice: anyone can answer the sample exam's questions and get instant feedback (no sign-up)", `/p/${sampleToken}`, { view: phone });
+  }
   // ---- teacher
   await shot("09-dashboard", "Teacher: your classes", "/app");
   await shot("10-class", "Teacher: class page (tests and roster)", `/app/classes/${classId}`);
@@ -158,6 +162,8 @@ try {
     await walk(`${classId}/`);
   }
   await fetch(`${URL_}/auth/v1/admin/users/${created.id}`, { method: "DELETE", headers: H });
+  // a screenshot from the live AI check (scripts/check-practice.mjs), if it was copied here
+  try { statSync(`${out}/08d-practice-feedback.png`); shots.splice(shots.findIndex((x) => x.file === "08c-practice") + 1, 0, { file: "08d-practice-feedback", title: "Practice feedback from the real AI: criteria met, evidence quoted from the answer, model answer" }); } catch { /* not captured */ }
   const html = `<!doctype html><meta charset="utf-8"><title>GradeLens screens</title>
 <style>body{font:16px system-ui;background:#f4f6fa;color:#1c2541;margin:0;padding:24px}h1{margin:0 0 4px}p{color:#4a5672;margin:0 0 24px}
 figure{background:#fff;border:1px solid #d6e2f3;border-radius:8px;margin:0 0 28px;padding:12px;max-width:1460px}figcaption{font-weight:600;margin-bottom:8px}

@@ -37,12 +37,16 @@ async function View({ params }: Pick<PageProps<"/u/[token]">, "params">) {
     );
   }
   // Only what the student needs: the names to choose from (ids are random, nothing else is exposed).
-  const { data: students } = await adminDb().from("students").select("id,display_name").eq("class_id", test.class_id).order("display_name");
+  const [{ data: students }, { data: t }] = await Promise.all([
+    adminDb().from("students").select("id,display_name").eq("class_id", test.class_id).order("display_name"),
+    adminDb().from("tests").select("rubric").eq("id", test.id).single<{ rubric: { questions: { q: number; marks: number; type: string }[] } }>(),
+  ]);
   return (
     <>
       <h1 className="mt-6 text-[1.7rem] font-[750] leading-tight tracking-tight">{test.title}</h1>
       <p className="mt-1 text-muted-foreground">{test.classes.name}</p>
-      <Uploader token={token} students={(students ?? []) as { id: string; display_name: string }[]} />
+      <Uploader token={token} students={(students ?? []) as { id: string; display_name: string }[]}
+        questions={(t?.rubric.questions ?? []).map((q) => ({ q: q.q, marks: q.marks, mcq: q.type === "mcq" }))} />
     </>
   );
 }

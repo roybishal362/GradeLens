@@ -1,9 +1,10 @@
-import { EyeOff, FileSpreadsheet, Highlighter, Lightbulb, ScanLine, Send, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { FileSpreadsheet, GraduationCap, Highlighter, Lightbulb, ScanLine, Send, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { MarkedScript } from "@/components/marked-script";
 import summary from "@/data/eval-summary.json";
 import { heroAnswer } from "@/lib/db/hero";
+import { samplePracticePath } from "@/lib/db/sample";
 import reviewShot from "../../public/screens/13-review.png";
 import collectShot from "../../public/screens/how-collect.png";
 import reviewCrop from "../../public/screens/how-review.png";
@@ -14,24 +15,24 @@ const mcqPct = Math.round((100 * summary.mcq.lettersCorrect) / Math.max(1, summa
 
 const FEATURES = [
   { icon: Highlighter, title: "Every mark shows its evidence", body: "The words behind each mark are highlighted on the student's page. Quotes are checked against the answer." },
-  { icon: ScanLine, title: "Paper or phone", body: "Students photograph their pages, or you print QR answer sheets and scan the pile in any order." },
+  { icon: ScanLine, title: "Paper, phone or typed", body: "Students photograph their pages or type their answers, or you print QR answer sheets and scan the pile in any order." },
   { icon: SlidersHorizontal, title: "Learns how you mark", body: "Your first decisions become the standard for the rest of the class. Every adjusted mark says why." },
   { icon: Lightbulb, title: "What the class misunderstood", body: "Wrong ideas grouped and counted, with a 10-minute re-teach plan, a worksheet and a re-test." },
-  { icon: Send, title: "Results for students", body: "Release when you're ready. Students get a private page with marks and feedback, and can ask for a re-check." },
+  { icon: Send, title: "Results for students and parents", body: "Release when you're ready. Each student gets a private page with marks and feedback to read or listen to, and can ask for a re-check." },
   { icon: FileSpreadsheet, title: "Gradebook and exports", body: "Every student across every test, letter grades, and CSV files for Excel, Sheets or your school's system." },
-  { icon: EyeOff, title: "Anonymous marking", body: "Hide names while you review. The AI never sees them anyway: answers are sent under a code." },
-  { icon: ShieldCheck, title: "You stay in charge", body: "Nothing counts until you approve it, and every change you make is recorded." },
+  { icon: GraduationCap, title: "Practice for students", body: "A practice link gives instant feedback on any question, typed or handwritten, without it counting as a grade. Tutors and self-learners can use it too." },
+  { icon: ShieldCheck, title: "You stay in charge", body: "Nothing counts until you approve it, every change is recorded, and you can hide names while you mark." },
 ];
 
 const FAQ = [
   ["Is it accurate enough to mark on its own?", "No, and it isn't meant to. It does the first pass and shows its evidence; you make every decision."],
-  ["What do students need?", "A phone with a camera, or nothing at all if you use printed answer sheets."],
+  ["What do students need?", "A phone with a camera, a device to type on, or nothing at all if you use printed answer sheets."],
   ["What can it mark?", "Written answers, maths working, labelled diagrams and multiple choice, in English."],
   ["Does it cost anything?", "No. It runs on free AI services, with a daily allowance per account."],
 ];
 
 export default async function Home() {
-  const hero = await heroAnswer();
+  const [hero, practice] = await Promise.all([heroAnswer(), samplePracticePath()]);
   return (
     <>
       <header className="sticky top-0 z-30 border-b border-ruling/70 bg-paper/90 backdrop-blur">
@@ -54,7 +55,7 @@ export default async function Home() {
         {/* hero */}
         <section className="mx-auto grid w-full max-w-6xl gap-12 px-5 pb-14 pt-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:items-center lg:pt-16">
           <div className="max-w-xl">
-            <p className="text-[0.95rem] font-semibold text-redpen">For teachers who mark on paper</p>
+            <p className="text-[0.95rem] font-semibold text-redpen">For teachers, tutors and their students</p>
             <h1 className="mt-3 text-[2.5rem] font-[750] leading-[1.08] tracking-tight sm:text-[3rem]">
               Marks you can check against the student&apos;s own words.
             </h1>
@@ -66,7 +67,9 @@ export default async function Home() {
               <Link href="/sample" className="rounded-md bg-redpen px-5 py-3 font-semibold text-white shadow-sm hover:bg-[#b81f1f]">Try it on real scripts</Link>
               <Link href="/sign-in" className="rounded-md border border-ink/20 bg-white px-5 py-3 font-semibold hover:bg-secondary">Start your class</Link>
             </div>
-            <p className="mt-4 text-[0.95rem] text-muted-foreground">No sign-up needed for the sample class.</p>
+            <p className="mt-4 text-[0.95rem] text-muted-foreground">
+              No sign-up needed.{practice && <> Or <Link href={practice} className="font-semibold text-ink underline underline-offset-4">answer an exam question yourself</Link> and get feedback in under a minute.</>}
+            </p>
           </div>
           {hero ? <MarkedScript data={hero} /> : <Image src={reviewShot} alt="The review screen" className="rounded-lg border border-ruling shadow-sm" priority sizes="(min-width: 1024px) 40rem, 100vw" />}
         </section>

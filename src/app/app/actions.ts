@@ -298,3 +298,13 @@ export async function deleteAccount(confirm: string): Promise<ActionResult> {
   await db.auth.signOut();
   redirect("/?deleted=1");
 }
+
+/** Open or close practice for a test (students get instant feedback that doesn't count as a grade). */
+export async function setPracticeOpen(testId: string, open: boolean): Promise<ActionResult> {
+  await requireTeacher();
+  const db = await userDb();
+  const { error } = await db.from("tests").update({ practice_open: open }).eq("id", testId);
+  if (error) return { ok: false, error: "Couldn't change that. Try again." };
+  revalidatePath(`/app/tests/${testId}`);
+  return { ok: true };
+}

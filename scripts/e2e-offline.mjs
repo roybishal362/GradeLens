@@ -179,6 +179,23 @@ try {
   check("the teacher's reply appears on the student's page", await sp.evaluate(() => document.body.innerText.includes("the mark stands")));
   await student.close();
 
+  // ---- practice: the teacher opens it from the test page
+  await page.goto(`${APP}/app/tests/${test.id}`, { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(() => [...document.querySelectorAll("button")].some((b) => b.textContent.trim() === "Open practice"), { timeout: 60000 });
+  await page.waitForNetworkIdle({ idleTime: 800, timeout: 30000 }).catch(() => {});
+  for (let i = 0; i < 3 && !(await page.evaluate(() => [...document.querySelectorAll("code")].some((c) => c.textContent.includes("/p/")))); i++) {
+    await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Open practice")?.click());
+    await page.waitForFunction(() => [...document.querySelectorAll("code")].some((c) => c.textContent.includes("/p/")), { timeout: 10000 }).catch(() => {});
+  }
+  const [pt] = await rest(`tests?id=eq.${test.id}&select=practice_open,practice_token`);
+  const practiceUrl = await page.evaluate(() => [...document.querySelectorAll("code")].map((c) => c.textContent).find((x) => x.includes("/p/")));
+  check("teacher opens practice and gets the practice link", pt.practice_open === true && practiceUrl?.endsWith(pt.practice_token));
+  const pp = await browser.newPage();
+  await pp.goto(practiceUrl, { waitUntil: "domcontentloaded" });
+  await pp.waitForFunction(() => document.body.innerText.includes("Practise:"), { timeout: 60000 });
+  check("the practice page opens for students without signing in", await pp.evaluate(() => document.querySelectorAll("textarea").length > 0 && document.body.innerText.includes("doesn't count towards a grade")));
+  await pp.close();
+
   // ---- insights
   t = Date.now();
   await page.goto(`${APP}/app/tests/${test.id}/insights`, { waitUntil: "domcontentloaded" });
@@ -191,17 +208,24 @@ try {
   // ---- answer sheets -> photos -> scan (mark scheme set back to draft so nothing is sent to the AI)
   await sb.from("tests").update({ rubric_status: "draft" }).eq("id", test.id);
   await page.goto(`${APP}/app/tests/${test.id}/sheets?pages=2`, { waitUntil: "domcontentloaded" });
-  await page.waitForFunction(() => document.querySelectorAll("section svg").length === 6, { timeout: 60000 });
-  const sheets = await page.$$("main section");
+  await page.waitForFunction(() => document.querySelectorAll("main section:has(svg)").length === 6, { timeout: 60000 });
+  await new Promise((r) => setTimeout(r, 800)); // let the streamed page settle before photographing the sheets
+  const sheets = await page.$$("main section:has(svg)");
+  if (sheets.length !== 6) throw new Error(`expected 6 printed sheets, found ${sheets.length}`);
   const shots = [];
   for (const [i, el] of sheets.entries()) { const p = `${out}/sheet-${i}.png`; await el.screenshot({ path: p }); shots.push(p); }
   log(`printed ${shots.length} sheets (3 students x 2 pages) and photographed them`);
   const shuffled = [shots[3], shots[0], shots[5], shots[2], shots[1], shots[4]].map((p) => p.replace(/\//g, "\\"));
   await page.goto(`${APP}/app/tests/${test.id}/scan`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector("input[type=file]", { timeout: 60000 });
+  await page.waitForNetworkIdle({ idleTime: 800, timeout: 30000 }).catch(() => {}); // interactive before choosing files
   t = Date.now();
-  await (await page.$("input[type=file]")).uploadFile(...shuffled);
-  await waitText("photos →", 120000);
+  for (let i = 0; i < 3 && !(await page.evaluate(() => document.body.innerText.includes("photos →"))); i++) {
+    await (await page.$("input[type=file]")).uploadFile(...shuffled);
+    await page.waitForFunction(() => document.body.innerText.includes("photos →") || document.body.innerText.includes("Reading QR"), { timeout: 15000 }).catch(() => {});
+    await page.waitForFunction(() => document.body.innerText.includes("photos →"), { timeout: 60000 }).catch(() => {});
+  }
+  await waitText("photos →", 5000);
   const summary = await page.evaluate(() => [...document.querySelectorAll("p")].find((p) => p.textContent.includes("photos →"))?.textContent);
   check("the shuffled pile is sorted to 3 students by QR code", /6 photos → 3 students$/.test(summary ?? ""), `${summary} in ${Date.now() - t} ms`);
   await page.screenshot({ path: `${out}/05-scan.png`, fullPage: true });
@@ -220,6 +244,31 @@ try {
     return { header: dark(0.02, 0.12), body: dark(0.2, 0.95) };
   }, `${URL_}/storage/v1${signed.signedURL}`);
   check("the printed name band is blank in the uploaded photo (redacted on the device)", band.header === 0 && band.body > 0, `dark pixels: header ${band.header}, answer area ${band.body}`);
+  // typed hand-in (mark scheme is in draft here, so nothing goes to the AI)
+  const [{ upload_token: up }] = await rest(`tests?id=eq.${test.id}&select=upload_token`);
+  const tp = await browser.newPage();
+  await tp.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  await tp.goto(`${APP}/u/${up}`, { waitUntil: "domcontentloaded" });
+  await tp.waitForSelector("select", { timeout: 60000 });
+  await tp.waitForNetworkIdle({ idleTime: 800, timeout: 30000 }).catch(() => {});
+  const alanId = await tp.evaluate(() => [...document.querySelectorAll("option")].find((o) => o.textContent === "Alan Turing")?.value);
+  await tp.select("select", alanId);
+  await tp.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Type answers")?.click());
+  await tp.waitForSelector("textarea", { timeout: 15000 });
+  await tp.evaluate(() => {
+    const ta = document.querySelector("textarea");
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(ta, "Supervised learning uses labelled data to learn a mapping from inputs to outputs.");
+    ta.dispatchEvent(new Event("input", { bubbles: true }));
+    [...document.querySelectorAll("button[role=radio]")].find((b) => b.textContent === "B")?.click();
+  });
+  await tp.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.startsWith("Send 2 answers"))?.click());
+  await tp.waitForFunction(() => document.body.innerText.includes("typed answers"), { timeout: 30000 });
+  await tp.close();
+  const alanSub = (await rest(`submissions?test_id=eq.${test.id}&select=id,status,warnings,student_id,students!inner(display_name)&students.display_name=eq.Alan Turing`))[0];
+  const [run] = await rest(`grading_runs?submission_id=eq.${alanSub.id}&select=models,read_result`);
+  check("a student can hand in typed answers (stored as the transcription, labelled as typed)",
+    alanSub.warnings.includes("Typed answers (no photos).") && run?.models?.reader === "typed" && run.read_result.answers.length === 2,
+    `status ${alanSub.status}, ${run?.read_result?.answers?.length ?? 0} answers`);
   const refused = await page.evaluate(() => document.body.innerText.includes("already started marking"));
   check("a script the teacher already started reviewing is NOT replaced by a scan", refused);
   await page.screenshot({ path: `${out}/06-scan-sent.png` });

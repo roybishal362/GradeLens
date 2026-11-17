@@ -150,6 +150,18 @@ try {
   const fakeProf = await api("/rest/v1/teacher_profiles", { method: "POST", token: B.token, body: { user_id: A.id, display_name: "spoof" } });
   check("teacher profiles are private and can't be written for someone else", prof.status === 201 && bProf.json?.length === 0 && fakeProf.status >= 400, `own ${prof.status}, spoof ${fakeProf.status}`);
 
+  // 6c. Practice: hidden link token, private attempts, server-only writes
+  const pTok = await api(`/rest/v1/tests?id=eq.${testId}&select=practice_token`, { token: A.token });
+  const pTokAnon = await api(`/rest/v1/tests?select=practice_token&limit=1`);
+  check("practice link tokens are never exposed through the public API", pTok.status >= 400 && pTokAnon.status >= 400, `owner ${pTok.status}, anon ${pTokAnon.status}`);
+  const att = (await db.query(`insert into public.practice_attempts (test_id, mode, questions, score, max, result) values ($1, 'typed', '{1}', 1, 2, '[]') returning id`, [testId])).rows[0].id;
+  const aAtt = await api(`/rest/v1/practice_attempts?id=eq.${att}&select=id`, { token: A.token });
+  const bAtt = await api(`/rest/v1/practice_attempts?id=eq.${att}&select=id`, { token: B.token });
+  const anonAtt = await api(`/rest/v1/practice_attempts?id=eq.${att}&select=id`);
+  check("practice attempts are visible only to the class's teacher", aAtt.json?.length === 1 && bAtt.json?.length === 0 && (anonAtt.status >= 400 || anonAtt.json?.length === 0));
+  const fakeAtt = await api("/rest/v1/practice_attempts", { method: "POST", token: A.token, body: { test_id: testId, mode: "typed", questions: [1], score: 9, max: 2, result: [] } });
+  check("nobody can write practice attempts directly", fakeAtt.status >= 400, `status ${fakeAtt.status}`);
+
   // 7. Server-only functions are not callable from the browser
   for (const [fn, body] of [["claim_submission", { sid: sub }], ["bump_usage", { b: "x", lim: 1 }], ["stale_guests", {}], ["refresh_submission", { sid: sub }]]) {
     const anon = await api(`/rest/v1/rpc/${fn}`, { method: "POST", body });

@@ -8,11 +8,12 @@ import { fmtMark, Mark, RiskLabel, STATUS_LABEL } from "@/components/marks";
 import { btn, PageHeader } from "@/components/page-header";
 import { requireTeacher } from "@/lib/dal";
 import { testMarks } from "@/lib/db/results-data";
-import { siteOrigin, uploadLinkFor } from "@/lib/db/teacher";
+import { practiceLinkFor, siteOrigin, uploadLinkFor } from "@/lib/db/teacher";
 import { SUB_COLS, type SubmissionRow } from "@/lib/db/types";
 import { summaryStats } from "@/lib/results";
 import { userDb } from "@/lib/supabase/clients";
 import { LiveStatus, ScriptActions, UploadControls } from "./controls";
+import { PracticePanel } from "./practice-panel";
 import { GradeBoundaries, ResultsPanel } from "./results-panel";
 
 export const metadata: Metadata = { title: "Test" };
@@ -36,12 +37,29 @@ async function View({ params }: Pick<PageProps<"/app/tests/[testId]">, "params">
   if (!data) notFound();
   const { test, lines } = data;
   const db = await userDb();
-  const [{ data: subs }, link, origin, { data: requests }] = await Promise.all([
+  const [{ data: subs }, link, origin, { data: requests }, practiceLink, { data: attempts }] = await Promise.all([
     db.from("submissions").select(SUB_COLS).eq("test_id", testId).returns<SubmissionRow[]>(),
     uploadLinkFor(testId),
     siteOrigin(),
     db.from("review_requests").select("id,q,message,created_at,submission_id,submissions!inner(test_id,student_id)").eq("submissions.test_id", testId).eq("status", "open").order("created_at"),
+    practiceLinkFor(testId),
+    db.from("practice_attempts").select("student_id,score,max,result,created_at").eq("test_id", testId).order("created_at", { ascending: false }).limit(300),
   ]);
+  type Attempt = { student_id: string | null; score: number; max: number; result: { misconceptions: string[] }[]; created_at: string };
+  const att = (attempts ?? []) as Attempt[];
+  const misCount = new Map<string, number>();
+  for (const a of att) for (const r of a.result) for (const m of r.misconceptions ?? []) misCount.set(m, (misCount.get(m) ?? 0) + 1);
+  const nameById = new Map(lines.map((l) => [l.studentId, l.name]));
+  const practiceStats = {
+    attempts: att.length,
+    average: att.length ? att.reduce((s, a) => s + (100 * Number(a.score)) / Math.max(1, Number(a.max)), 0) / att.length : null,
+    topMisconceptions: [...misCount].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([text, n]) => ({ text, n })),
+    recent: att.slice(0, 5).map((a) => ({
+      who: (a.student_id && nameById.get(a.student_id)) || "Anonymous",
+      score: `${Number(a.score)}/${Number(a.max)}`,
+      when: new Date(a.created_at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
+    })),
+  };
   const byStudent = new Map((subs ?? []).map((s) => [s.student_id, s]));
   const nameOfSub = new Map(lines.filter((l) => l.submissionId).map((l) => [l.submissionId!, l.name]));
   const marked = lines.filter((l) => l.percent !== null);
@@ -203,6 +221,12 @@ async function View({ params }: Pick<PageProps<"/app/tests/[testId]">, "params">
               <ResultsPanel testId={testId} released={test.results_released}
                 notReady={(subs ?? []).filter((s) => s.status !== "approved").length}
                 links={lines.filter((l) => l.resultToken && l.approved).map((l) => ({ name: l.name, url: `${origin}/r/${l.resultToken}` }))} />
+            </div>
+          </section>
+          <section className={panel} aria-labelledby="practice-h">
+            <h2 id="practice-h" className="font-semibold">Practice with instant feedback</h2>
+            <div className="mt-2">
+              {practiceLink && <PracticePanel testId={testId} open={test.practice_open} url={practiceLink.url} qrSvg={practiceLink.qrSvg} schemeApproved={schemeOk} stats={practiceStats} />}
             </div>
           </section>
           <section className={panel} aria-labelledby="grades-h">
