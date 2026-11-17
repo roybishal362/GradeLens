@@ -1,0 +1,246 @@
+{
+  "output": {
+    "studentName": "Liam Turner",
+    "answers": [
+      {
+        "q": 1,
+        "text": "Photosynthesis is how plants take their food from the soil using sunlight. 6CO2 + 6H2O -> C6H12O6 + 6O2",
+        "formulas": [
+          "6CO2 + 6H2O -> C6H12O6 + 6O2"
+        ],
+        "diagram": null,
+        "lines": [
+          {
+            "text": "Q1. Photosynthesis is how plants take their food from the soil",
+            "box": [
+              88,
+              62,
+              108,
+              788
+            ]
+          },
+          {
+            "text": "using sunlight. 6CO2 + 6H2O -> C6H12O6 + 6O2",
+            "box": [
+              118,
+              93,
+              138,
+              672
+            ]
+          }
+        ],
+        "page": 1,
+        "illegible": [],
+        "confidence": 1
+      },
+      {
+        "q": 2,
+        "text": "Mitosis makes gametes. Meiosis is for growth and repair. Meiosis has two divisions and makes 4 cells.",
+        "formulas": [],
+        "diagram": null,
+        "lines": [
+          {
+            "text": "Q2. Mitosis makes gametes. Meiosis is for growth and repair.",
+            "box": [
+              148,
+              62,
+              168,
+              795
+            ]
+          },
+          {
+            "text": "Meiosis has two divisions and makes 4 cells.",
+            "box": [
+              178,
+              93,
+              198,
+              545
+            ]
+          }
+        ],
+        "page": 1,
+        "illegible": [],
+        "confidence": 1
+      },
+      {
+        "q": 3,
+        "text": "2x^2 - 7x + 3 = 0 2x^2 - 6x - x + 3 = 0 2x(x - 3) - 1(x - 3) = 0 (2x - 1)(x - 3) = 0 so x = 1/2 or x = 3",
+        "formulas": [
+          "2x^2 - 7x + 3 = 0",
+          "2x^2 - 6x - x + 3 = 0",
+          "2x(x - 3) - 1(x - 3) = 0",
+          "(2x - 1)(x - 3) = 0",
+          "x = 1/2 or x = 3"
+        ],
+        "diagram": null,
+        "lines": [
+          {
+            "text": "Q3. 2x^2 - 7x + 3 = 0",
+            "box": [
+              208,
+              62,
+              228,
+              305
+            ]
+          },
+          {
+            "text": "2x^2 - 6x - x + 3 = 0",
+            "box": [
+              238,
+              93,
+              258,
+              340
+            ]
+          },
+          {
+            "text": "2x(x - 3) - 1(x - 3) = 0",
+            "box": [
+              268,
+              93,
+              288,
+              370
+            ]
+          },
+          {
+            "text": "(2x - 1)(x - 3) = 0 so x = 1/2 or x = 3",
+            "box": [
+              298,
+              93,
+              318,
+              545
+            ]
+          }
+        ],
+        "page": 1,
+        "illegible": [],
+        "confidence": 1
+      },
+      {
+        "q": 4,
+        "text": "(diagram below)",
+        "formulas": [],
+        "diagram": {
+          "outline": "A large oval containing a smaller central circle, a tiny circle, and pointers from labels to these parts.",
+          "labels": [
+            "cell membrane",
+            "nucleus",
+            "mitochondria",
+            "cytoplasm"
+          ]
+        },
+        "lines": [
+          {
+            "text": "Q4. (diagram below)",
+            "box": [
+              328,
+              62,
+              348,
+              285
+            ]
+          },
+          {
+            "text": "cell membrane",
+            "box": [
+              428,
+              740,
+              448,
+              875
+            ]
+          },
+          {
+            "text": "nucleus",
+            "box": [
+              468,
+              595,
+              488,
+              665
+            ]
+          },
+          {
+            "text": "mitochondria",
+            "box": [
+              488,
+              25,
+              508,
+              145
+            ]
+          },
+          {
+            "text": "cytoplasm",
+            "box": [
+              588,
+              38,
+              608,
+              138
+            ]
+          }
+        ],
+        "page": 1,
+        "illegible": [],
+        "confidence": 1
+      },
+      {
+        "q": 5,
+        "text": "Every action has an equal and opposite reaction. The two forces cancel out because they act on the same body, like a book resting on a table.",
+        "formulas": [],
+        "diagram": null,
+        "lines": [
+          {
+            "text": "Q5. Every action has an equal and opposite reaction.",
+            "box": [
+              98,
+              62,
+              118,
+              645
+            ]
+          },
+          {
+            "text": "The two forces cancel out because they act on the same body,",
+            "box": [
+              128,
+              93,
+              148,
+              785
+            ]
+          },
+          {
+            "text": "like a book resting on a table.",
+            "box": [
+              158,
+              93,
+              178,
+              415
+            ]
+          }
+        ],
+        "page": 2,
+        "illegible": [],
+        "confidence": 1
+      },
+      {
+        "q": 6,
+        "text": "Mitochondria",
+        "formulas": [],
+        "diagram": null,
+        "lines": [
+          {
+            "text": "Q6. Mitochondria",
+            "box": [
+              188,
+              62,
+              208,
+              245
+            ]
+          }
+        ],
+        "page": 2,
+        "illegible": [],
+        "confidence": 1
+      }
+    ],
+    "imageQuality": "good"
+  },
+  "model": "gemini/gemini-3-flash-preview",
+  "ms": 24242,
+  "attempts": []
+}

@@ -1,0 +1,63 @@
+import "server-only";
+
+import { QR_COLS, SUB_COLS, TEST_COLS, type PageRow, type QuestionResultRow, type StudentRow, type SubmissionRow, type TestRow } from "@/lib/db/types";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { adminDb, userDb } from "@/lib/supabase/clients";
+
+export type ReviewScript = SubmissionRow & { student: Pick<StudentRow, "id" | "display_name" | "anon_code"> };
+export type ReviewData = {
+  test: TestRow;
+  className: string;
+  isSample: boolean;
+  scripts: ReviewScript[];
+  current: { script: ReviewScript; results: QuestionResultRow[]; pages: (PageRow & { url: string })[] } | null;
+};
+
+const RANK = { high: 0, medium: 1, low: 2 } as const;
+
+/**
+ * Everything the review screen needs, read under Row Level Security: a teacher sees their own tests, anyone sees the
+ * sample class. Page images: signed for one hour (private bucket); the sample's images are public files.
+ */
+export async function loadReview(testId: string, submissionId?: string, client?: SupabaseClient): Promise<ReviewData | null> {
+  const db = client ?? (await userDb());
+  const { data: test } = await db.from("tests").select(TEST_COLS).eq("id", testId).maybeSingle<TestRow>();
+  if (!test) return null;
+  const [{ data: cls }, { data: subs }, { data: students }] = await Promise.all([
+    db.from("classes").select("name,is_sample").eq("id", test.class_id).single<{ name: string; is_sample: boolean }>(),
+    db.from("submissions").select(SUB_COLS).eq("test_id", testId).in("status", ["graded", "approved"]).returns<SubmissionRow[]>(),
+    db.from("students").select("id,display_name,anon_code").eq("class_id", test.class_id).returns<StudentRow[]>(),
+  ]);
+  const byId = new Map((students ?? []).map((s) => [s.id, s]));
+  const scripts: ReviewScript[] = (subs ?? [])
+    .filter((s) => byId.has(s.student_id))
+    .map((s) => ({ ...s, student: byId.get(s.student_id)! }))
+    // waiting first, riskiest first, then by name
+    .sort((a, b) =>
+      Number(a.status === "approved") - Number(b.status === "approved") ||
+      RANK[a.risk ?? "low"] - RANK[b.risk ?? "low"] ||
+      a.student.display_name.localeCompare(b.student.display_name, undefined, { numeric: true }));
+
+  const script = scripts.find((s) => s.id === submissionId) ?? scripts[0];
+  if (!script) return { test, className: cls?.name ?? "", isSample: Boolean(cls?.is_sample), scripts, current: null };
+
+  const [{ data: results }, { data: pages }] = await Promise.all([
+    db.from("question_results").select(QR_COLS).eq("submission_id", script.id).order("q").returns<QuestionResultRow[]>(),
+    db.from("pages").select("id,submission_id,page_no,storage_path,media_type,width,height").eq("submission_id", script.id).order("page_no").returns<PageRow[]>(),
+  ]);
+  const stored = (pages ?? []).filter((p) => !p.storage_path.startsWith("/"));
+  const signed = new Map<string, string>();
+  if (stored.length) {
+    // the rows above were visible to this user (RLS), so signing exactly those paths is safe
+    const { data } = await adminDb().storage.from("pages").createSignedUrls(stored.map((p) => p.storage_path), 3600);
+    for (const s of data ?? []) if (s.path && s.signedUrl) signed.set(s.path, s.signedUrl);
+  }
+  return {
+    test, className: cls?.name ?? "", isSample: Boolean(cls?.is_sample), scripts,
+    current: {
+      script,
+      results: (results ?? []).map((r) => ({ ...r, max: Number(r.max), ai_score: Number(r.ai_score), score_a: Number(r.score_a), score_b: Number(r.score_b), teacher_score: r.teacher_score === null ? null : Number(r.teacher_score), reference_score: r.reference_score === null ? null : Number(r.reference_score) })),
+      pages: (pages ?? []).map((p) => ({ ...p, url: p.storage_path.startsWith("/") ? p.storage_path : signed.get(p.storage_path) ?? "" })),
+    },
+  };
+}

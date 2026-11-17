@@ -1,0 +1,100 @@
+{
+ "generatedAt": "2026-11-17T14:07:59.015Z",
+ "dataset": {
+  "name": "A Dataset of Digitized Student Examination Papers, Answer Keys, and Manual Evaluations for Automated Grading Research",
+  "doi": "10.17632/sf3kvjwknt.1",
+  "license": "CC BY 4.0",
+  "students": 50
+ },
+ "calibrationStudents": 5,
+ "testStudents": 11,
+ "examplesUsed": 51,
+ "modes": {
+  "rubric only": {
+   "n": 138,
+   "exact": 0.464,
+   "withinHalf": 0.594,
+   "mae": 0.576,
+   "bias": -0.518,
+   "qwk": 0.515,
+   "autoApprovable": 0.862,
+   "withinHalfAmongLow": 0.563,
+   "withinHalfAmongFlagged": 0.789,
+   "errorsCaught": 0.071,
+   "errors": 56,
+   "caught": 4,
+   "unmarked": 27,
+   "unmarkedGivenMarks": 2
+  },
+  "calibrated": {
+   "n": 138,
+   "exact": 0.478,
+   "withinHalf": 0.638,
+   "mae": 0.529,
+   "bias": -0.406,
+   "qwk": 0.555,
+   "autoApprovable": 0.877,
+   "withinHalfAmongLow": 0.636,
+   "withinHalfAmongFlagged": 0.647,
+   "errorsCaught": 0.12,
+   "errors": 50,
+   "caught": 6,
+   "unmarked": 27,
+   "unmarkedGivenMarks": 2
+  },
+  "rubric + learned shifts": {
+   "n": 138,
+   "exact": 0.435,
+   "withinHalf": 0.725,
+   "mae": 0.46,
+   "bias": -0.221,
+   "qwk": 0.626,
+   "autoApprovable": 0.862,
+   "withinHalfAmongLow": 0.739,
+   "withinHalfAmongFlagged": 0.632,
+   "errorsCaught": 0.184,
+   "errors": 38,
+   "caught": 7,
+   "unmarked": 27,
+   "unmarkedGivenMarks": 2
+  },
+  "calibrated + learned shifts": {
+   "n": 138,
+   "exact": 0.507,
+   "withinHalf": 0.717,
+   "mae": 0.428,
+   "bias": -0.13,
+   "qwk": 0.638,
+   "autoApprovable": 0.877,
+   "withinHalfAmongLow": 0.727,
+   "withinHalfAmongFlagged": 0.647,
+   "errorsCaught": 0.154,
+   "errors": 39,
+   "caught": 6,
+   "unmarked": 27,
+   "unmarkedGivenMarks": 2
+  }
+ },
+ "mcq": {
+  "lettersRead": 280,
+  "lettersCorrect": 276
+ },
+ "teacherConsistency": {
+  "mcqTotalsMatchPublishedKey": 13,
+  "bestAlternativeKey": {
+   "question": 1,
+   "published": "B",
+   "alternative": "D",
+   "matches": 32
+  }
+ },
+ "models": [
+  "gemini/gemini-3.5-flash",
+  "gemini/gemini-3.5-flash-lite",
+  "gemini/gemini-3.1-flash-lite",
+  "groq/qwen/qwen3.8-27b",
+  "gemini/gemini-3-flash-preview",
+  "gemini/gemini-3.6-flash",
+  "gemini/gemini-flash-lite-latest"
+ ]
+}
