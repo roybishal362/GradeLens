@@ -271,6 +271,23 @@ try {
     `status ${alanSub.status}, ${run?.read_result?.answers?.length ?? 0} answers`);
   const refused = await page.evaluate(() => document.body.innerText.includes("already started marking"));
   check("a script the teacher already started reviewing is NOT replaced by a scan", refused);
+  // copy the sample class into this workspace (no uploads, no AI): what judges and pilot teachers use
+  await page.goto(`${APP}/app`, { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(() => [...document.querySelectorAll("button")].some((b) => b.textContent.includes("Copy the sample class")), { timeout: 60000 }).catch(() => {});
+  const hasCopy = await page.evaluate(() => [...document.querySelectorAll("button")].some((b) => b.textContent.includes("Copy the sample class")));
+  if (!hasCopy) {
+    // the getting-started box is hidden once everything is done: use the sample page's button instead
+    await page.goto(`${APP}/sample`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => [...document.querySelectorAll("button")].some((b) => b.textContent.includes("Mark these scripts in your own workspace")), { timeout: 60000 });
+  }
+  await page.waitForNetworkIdle({ idleTime: 800, timeout: 30000 }).catch(() => {});
+  t = Date.now();
+  await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.includes("Copy the sample class") || b.textContent.includes("Mark these scripts in your own workspace"))?.click());
+  await page.waitForFunction(() => /\/app\/tests\//.test(location.pathname) && document.body.innerText.includes("Scripts"), { timeout: 120000 });
+  const copiedTestId = page.url().split("/tests/")[1].split(/[/?#]/)[0];
+  const copied = await rest(`submissions?test_id=eq.${copiedTestId}&select=id`);
+  const copiedMarks = await rest(`question_results?select=id,submissions!inner(test_id)&submissions.test_id=eq.${copiedTestId}`);
+  check("one click copies the 20 real sample scripts into the teacher's own workspace", copied.length === 20 && copiedMarks.length === 700, `${copied.length} scripts, ${copiedMarks.length} marks in ${((Date.now() - t) / 1000).toFixed(1)} s`);
   await page.screenshot({ path: `${out}/06-scan-sent.png` });
 } catch (e) {
   problems.push(`FAILED: ${e.message}`);

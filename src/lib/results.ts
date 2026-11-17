@@ -46,3 +46,15 @@ export function toCsv(rows: (string | number | null | undefined)[][]): string {
 }
 
 export const percentOf = (total: number | null, max: number | null) => (total === null || !max ? null : (100 * Number(total)) / Number(max));
+
+/**
+ * Time actually spent reviewing, from the audit log: the gaps between consecutive decisions, each capped at
+ * `capSeconds` (a longer gap is a break, not marking). Bulk approvals are counted apart so per-mark time stays honest.
+ */
+export function reviewTime(events: { at: string; bulk: boolean }[], capSeconds = 120) {
+  const times = events.map((e) => ({ t: Date.parse(e.at), bulk: e.bulk })).filter((e) => !Number.isNaN(e.t)).sort((a, b) => a.t - b.t);
+  let active = 0;
+  for (let i = 1; i < times.length; i++) active += Math.min(capSeconds, (times[i].t - times[i - 1].t) / 1000);
+  const individual = times.filter((e) => !e.bulk).length, bulk = times.length - individual;
+  return { seconds: Math.round(active), individual, bulk, secondsPerMark: individual > 1 ? Math.round(active / individual) : null };
+}

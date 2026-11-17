@@ -39,3 +39,17 @@ describe("CSV export", () => {
     expect(csv).toContain("'=HYPERLINK(1),1.23");
   });
 });
+
+describe("review time from the audit log", () => {
+  it("adds up the gaps between decisions, treats long gaps as breaks, and counts bulk approvals apart", async () => {
+    const { reviewTime } = await import("./results");
+    const at = (s: number) => new Date(Date.UTC(2026, 10, 17, 10, 0, s)).toISOString();
+    const r = reviewTime([
+      { at: at(0), bulk: false }, { at: at(10), bulk: false }, { at: at(30), bulk: false },
+      { at: at(30 + 3600), bulk: false }, // after an hour's break: counts as 2 minutes at most
+      { at: at(30 + 3600), bulk: true }, { at: at(30 + 3600), bulk: true },
+    ]);
+    expect(r).toEqual({ seconds: 10 + 20 + 120, individual: 4, bulk: 2, secondsPerMark: Math.round(150 / 4) });
+    expect(reviewTime([]).seconds).toBe(0);
+  });
+});

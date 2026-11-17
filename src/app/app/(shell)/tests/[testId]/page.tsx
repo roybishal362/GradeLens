@@ -10,7 +10,7 @@ import { requireTeacher } from "@/lib/dal";
 import { testMarks } from "@/lib/db/results-data";
 import { practiceLinkFor, siteOrigin, uploadLinkFor } from "@/lib/db/teacher";
 import { SUB_COLS, type SubmissionRow } from "@/lib/db/types";
-import { summaryStats } from "@/lib/results";
+import { reviewTime, summaryStats } from "@/lib/results";
 import { userDb } from "@/lib/supabase/clients";
 import { LiveStatus, ScriptActions, UploadControls } from "./controls";
 import { PracticePanel } from "./practice-panel";
@@ -37,14 +37,16 @@ async function View({ params }: Pick<PageProps<"/app/tests/[testId]">, "params">
   if (!data) notFound();
   const { test, lines } = data;
   const db = await userDb();
-  const [{ data: subs }, link, origin, { data: requests }, practiceLink, { data: attempts }] = await Promise.all([
+  const [{ data: subs }, link, origin, { data: requests }, practiceLink, { data: attempts }, { data: events }] = await Promise.all([
     db.from("submissions").select(SUB_COLS).eq("test_id", testId).returns<SubmissionRow[]>(),
     uploadLinkFor(testId),
     siteOrigin(),
     db.from("review_requests").select("id,q,message,created_at,submission_id,submissions!inner(test_id,student_id)").eq("submissions.test_id", testId).eq("status", "open").order("created_at"),
     practiceLinkFor(testId),
     db.from("practice_attempts").select("student_id,score,max,result,created_at").eq("test_id", testId).order("created_at", { ascending: false }).limit(300),
+    db.from("review_events").select("created_at,action,question_results!inner(submissions!inner(test_id))").eq("question_results.submissions.test_id", testId).order("created_at").limit(10000),
   ]);
+  const timing = reviewTime(((events ?? []) as { created_at: string; action: string }[]).map((e) => ({ at: e.created_at, bulk: e.action === "bulk_approve" })));
   type Attempt = { student_id: string | null; score: number; max: number; result: { misconceptions: string[] }[]; created_at: string };
   const att = (attempts ?? []) as Attempt[];
   const misCount = new Map<string, number>();
@@ -142,6 +144,13 @@ async function View({ params }: Pick<PageProps<"/app/tests/[testId]">, "params">
                 {stats.n} scripts marked{counts.waiting ? `, ${counts.waiting} still with suggested marks` : ""}.
                 {approvedMarks.length > 0 && ` You've approved ${approvedMarks.length} of ${allMarks.length} marks and changed ${changed}.`}
               </p>
+              {timing.individual + timing.bulk > 1 && (
+                <p className="mt-2 text-[0.9rem]">
+                  <span className="font-semibold">Your marking time:</span> about {Math.max(1, Math.round(timing.seconds / 60))} minute{Math.round(timing.seconds / 60) === 1 ? "" : "s"} for {timing.individual + timing.bulk} decisions
+                  {timing.bulk > 0 && ` (${timing.bulk} approved in bulk)`}{timing.secondsPerMark !== null && `, about ${timing.secondsPerMark} s per mark you checked one by one`}.
+                  <span className="text-muted-foreground"> Measured from your decisions; pauses over 2 minutes don&apos;t count.</span>
+                </p>
+              )}
               {gradeCounts.length > 0 && (
                 <p className="mt-2 flex flex-wrap gap-2 text-[0.9rem]">
                   {gradeCounts.map((g) => <span key={g.label} className="rounded-full bg-secondary px-2.5 py-0.5"><span className="font-semibold">{g.label}</span> {g.n}</span>)}

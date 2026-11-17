@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { createClass } from "@/app/app/actions";
+import { CopySampleButton } from "@/components/copy-sample-button";
 import { btn, PageHeader } from "@/components/page-header";
 import { requireTeacher } from "@/lib/dal";
 import { userDb } from "@/lib/supabase/clients";
@@ -83,9 +84,11 @@ async function Classes({ searchParams }: { searchParams: PageProps<"/app">["sear
               );
             })}
           </ol>
-          <p className="mt-4 flex items-center gap-2 text-[0.9rem] text-muted-foreground">
-            <BookOpen aria-hidden className="size-4" /> Want to see it first? <Link href="/sample" className="font-semibold text-ink underline underline-offset-4">Open the sample class</Link> with real marked scripts.
-          </p>
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-ruling pt-4 text-[0.9rem] text-muted-foreground">
+            <span className="flex items-center gap-2"><BookOpen aria-hidden className="size-4" /> Want to try it first on real scripts?</span>
+            <CopySampleButton />
+            <span>20 real exam scripts, already read and marked. Review, approve, release and export them as if they were yours.</span>
+          </div>
         </section>
       )}
 

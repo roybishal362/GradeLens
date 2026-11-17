@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DatasetAttribution } from "@/components/attribution";
+import { CopySampleButton } from "@/components/copy-sample-button";
 import { Mark, RiskLabel } from "@/components/marks";
 import { samplePracticePath, sampleReview } from "@/lib/db/sample";
 
@@ -46,6 +47,10 @@ export default async function SamplePage() {
             <Link href="/sample/insights" className="rounded-md border border-ink/25 bg-white px-5 py-2.5 font-semibold hover:bg-secondary">What the class misunderstood</Link>
             {practice && <Link href={practice} className="rounded-md border border-ink/25 bg-white px-5 py-2.5 font-semibold hover:bg-secondary">Answer a question yourself</Link>}
             <Link href="/transparency" className="px-1 py-2.5 font-semibold underline underline-offset-4">How accurate is it?</Link>
+          </div>
+          <div className="pt-1 text-[0.95rem] text-muted-foreground">
+            <CopySampleButton label="Mark these scripts in your own workspace" />
+            <span className="mt-1 block">Saves your decisions, so you can try releasing results, the gradebook and exports. Needs a free sign-in (a guest one is fine).</span>
           </div>
         </div>
         <dl className="grid grid-cols-2 content-start gap-px overflow-hidden rounded-md border border-ruling bg-ruling text-center">

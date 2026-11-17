@@ -308,3 +308,63 @@ export async function setPracticeOpen(testId: string, open: boolean): Promise<Ac
   revalidatePath(`/app/tests/${testId}`);
   return { ok: true };
 }
+
+/**
+ * Copy the public sample class (20 real exam scripts, already read and marked by GradeLens) into this teacher's own
+ * workspace, so they can try everything for real (review, approve, release, gradebook, exports) with no uploads and
+ * no AI calls. Page images are the public CC BY files, so nothing is duplicated in storage.
+ */
+export async function copySampleClass(): Promise<ActionResult> {
+  const t = await requireTeacher();
+  const db = await userDb();
+  if (t.isGuest) {
+    const { count } = await db.from("classes").select("id", { count: "exact", head: true });
+    if ((count ?? 0) >= 3) return { ok: false, error: "Guest workspaces can have up to 3 classes. Delete one first." };
+  }
+  if (!(await underLimit(`copy-sample:${t.id}`, 3))) return { ok: false, error: "You've copied the sample class 3 times today. Try again tomorrow." };
+  const admin = adminDb();
+  const { data: src } = await admin.from("classes").select("id,name,subject").eq("is_sample", true).limit(1).maybeSingle<{ id: string; name: string; subject: string | null }>();
+  if (!src) return { ok: false, error: "The sample class isn't available right now." };
+  const [{ data: tests }, { data: students }] = await Promise.all([
+    admin.from("tests").select("id,title,rubric").eq("class_id", src.id),
+    admin.from("students").select("id,display_name,anon_code").eq("class_id", src.id),
+  ]);
+  const { data: cls, error: e1 } = await admin.from("classes")
+    .insert({ owner_id: t.id, name: "Data Science (copy of the sample class)", subject: src.subject }).select("id").single<{ id: string }>();
+  if (e1 || !cls) return { ok: false, error: "Couldn't copy the sample class. Try again." };
+  try {
+    const { data: newStudents } = await admin.from("students")
+      .insert((students ?? []).map((s: { display_name: string; anon_code: string }) => ({ class_id: cls.id, display_name: s.display_name, anon_code: s.anon_code })))
+      .select("id,anon_code");
+    const studentMap = new Map((students ?? []).map((s: { id: string; anon_code: string }) => [s.id, (newStudents ?? []).find((n: { anon_code: string }) => n.anon_code === s.anon_code)?.id]));
+    let firstTest = "";
+    for (const test of (tests ?? []) as { id: string; title: string; rubric: Rubric }[]) {
+      const { data: nt } = await admin.from("tests").insert({ class_id: cls.id, title: test.title, rubric: test.rubric, rubric_status: "approved", uploads_open: false }).select("id").single<{ id: string }>();
+      if (!nt) throw new Error("test");
+      firstTest ||= nt.id;
+      const { data: subs } = await admin.from("submissions").select("id,student_id,status,total,max_total,risk,warnings").eq("test_id", test.id);
+      for (const s of (subs ?? []) as { id: string; student_id: string; status: string; total: number; max_total: number; risk: string; warnings: string[] }[]) {
+        const studentId = studentMap.get(s.student_id);
+        if (!studentId) continue;
+        const { data: ns } = await admin.from("submissions")
+          .insert({ test_id: nt.id, student_id: studentId, status: s.status, total: s.total, max_total: s.max_total, risk: s.risk, warnings: s.warnings, source: "sample" })
+          .select("id").single<{ id: string }>();
+        if (!ns) throw new Error("submission");
+        const [{ data: pages }, { data: qrs }] = await Promise.all([
+          admin.from("pages").select("page_no,storage_path,media_type,width,height").eq("submission_id", s.id),
+          admin.from("question_results").select("q,max,score_a,score_b,ai_score,risk,flags,answer,grade_a,grade_b,teacher_score,teacher_note,approved,approved_at,reference_score").eq("submission_id", s.id),
+        ]);
+        if (pages?.length) await admin.from("pages").insert(pages.map((p) => ({ ...p, submission_id: ns.id })));
+        if (qrs?.length) await admin.from("question_results").insert(qrs.map((r) => ({ ...r, submission_id: ns.id })));
+      }
+      const { data: ins } = await admin.from("insights").select("kind,payload,model").eq("test_id", test.id);
+      if (ins?.length) await admin.from("insights").insert(ins.map((i) => ({ ...i, test_id: nt.id })));
+    }
+    revalidatePath("/app", "layout");
+    redirect(`/app/tests/${firstTest}`);
+  } catch (e) {
+    if (e && typeof e === "object" && "digest" in e) throw e; // let the redirect through
+    await admin.from("classes").delete().eq("id", cls.id); // no half-copied class left behind
+    return { ok: false, error: "Couldn't copy the sample class. Try again." };
+  }
+}
