@@ -67,7 +67,7 @@ try {
   await page.setViewport({ width: 1440, height: 950 });
   page.on("pageerror", (e) => problems.push(`page error: ${e.message}`));
   page.on("console", (m) => { if (m.type() === "error" && !/favicon|Failed to load resource/.test(m.text())) problems.push(`console: ${m.text().slice(0, 160)}`); });
-  await page.setCookie(...[...jar].map(([name, value]) => ({ name, value, domain: "localhost", path: "/", sameSite: "Lax" })));
+  await page.setCookie(...[...jar].map(([name, value]) => ({ name, value, domain: new URL(APP).hostname, path: "/", sameSite: "Lax" })));
   const shot = (name) => page.screenshot({ path: `${out}/${name}.png` }); // viewport only: full-page shots of the 100dvh review layout are very slow
   const waitText = (text, timeout = 30000) => page.waitForFunction((t) => document.body.innerText.includes(t), { timeout, polling: 250 }, text);
 

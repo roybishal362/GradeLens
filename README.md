@@ -14,6 +14,8 @@ it learns each teacher's standard, and it has to **earn** the right to be approv
 ![AI SDK 7](https://img.shields.io/badge/AI%20SDK-7-1c2541)
 ![Free tiers only](https://img.shields.io/badge/AI-free%20tiers%20only-2b8a3e)
 
+**[Try the live app](https://gradelens-app.vercel.app)** · **[Open the sample class, no sign-in](https://gradelens-app.vercel.app/sample)**
+
 <a href="#measured-results">Measured results</a> ·
 <a href="#earned-trust">Earned trust</a> ·
 <a href="#product-tour">Product tour</a> ·

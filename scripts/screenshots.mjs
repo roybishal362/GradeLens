@@ -71,7 +71,7 @@ try {
   const desktop = { width: 1440, height: 900, deviceScaleFactor: 1 };
   const phone = { width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
   const page = await browser.newPage();
-  await page.setCookie(...[...jar].map(([name, value]) => ({ name, value, domain: "localhost", path: "/", sameSite: "Lax" })));
+  await page.setCookie(...[...jar].map(([name, value]) => ({ name, value, domain: new URL(APP).hostname, path: "/", sameSite: "Lax" })));
   async function shot(file, title, path, { view = desktop, full = true, before } = {}) {
     await page.setViewport(view);
     await page.goto(APP + path, { waitUntil: "networkidle2", timeout: 120000 });
@@ -143,7 +143,7 @@ try {
   await sb2.auth.signInWithPassword({ email: fresh, password });
   const p2 = await browser.newPage();
   await p2.setViewport(desktop);
-  await p2.setCookie(...[...jar2].map(([name, value]) => ({ name, value, domain: "localhost", path: "/", sameSite: "Lax" })));
+  await p2.setCookie(...[...jar2].map(([name, value]) => ({ name, value, domain: new URL(APP).hostname, path: "/", sameSite: "Lax" })));
   await p2.goto(`${APP}/app`, { waitUntil: "networkidle2" });
   await p2.waitForFunction(() => document.body.innerText.includes("Getting started"), { timeout: 60000 });
   await p2.screenshot({ path: `${out}/09a-first-visit.png`, fullPage: true });

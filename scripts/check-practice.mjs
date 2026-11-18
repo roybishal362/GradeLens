@@ -5,7 +5,7 @@ import puppeteer from "puppeteer-core";
 
 const out = process.argv[2] ?? "practice-check";
 mkdirSync(out, { recursive: true });
-const APP = "http://localhost:3000";
+const APP = process.env.APP_URL ?? "http://localhost:3000";
 const browser = await puppeteer.launch({ executablePath: "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless: true });
 let ok = false;
 try {

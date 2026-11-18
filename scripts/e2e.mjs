@@ -13,7 +13,7 @@ mkdirSync(out, { recursive: true });
 const env = Object.fromEntries(readFileSync(new URL("../.env.local", import.meta.url), "utf8").split(/\r?\n/)
   .filter((l) => /^[A-Z_]+=/.test(l)).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1).trim()]));
 const URL_ = env.NEXT_PUBLIC_SUPABASE_URL, PUB = env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, SEC = env.SUPABASE_SECRET_KEY;
-const APP = "http://localhost:3000";
+const APP = process.env.APP_URL ?? "http://localhost:3000";
 const DATA = new URL("../../datasets/mendeley-sf3kvjwknt/", import.meta.url);
 const t0 = Date.now();
 const log = (s) => console.log(`[${((Date.now() - t0) / 1000).toFixed(0).padStart(4)}s] ${s}`);
@@ -46,7 +46,7 @@ try {
   await page.setViewport({ width: 1440, height: 950 });
   page.on("pageerror", (e) => problems.push(`page error: ${e.message}`));
   page.on("console", (m) => { if (m.type() === "error") problems.push(`console: ${m.text().slice(0, 200)}`); });
-  await page.setCookie(...[...jar].map(([name, value]) => ({ name, value, domain: "localhost", path: "/", sameSite: "Lax" })));
+  await page.setCookie(...[...jar].map(([name, value]) => ({ name, value, domain: new URL(APP).hostname, path: "/", sameSite: "Lax" })));
   const clickText = async (p, sel, text) => {
     const ok = await p.evaluate((sel, text) => {
       const el = [...document.querySelectorAll(sel)].find((e) => e.textContent.trim().startsWith(text) && !e.disabled);

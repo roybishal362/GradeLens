@@ -42,7 +42,7 @@ const PHONE = { width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, h
 
 try {
   const page = await browser.newPage();
-  await page.setCookie(...[...jar].map(([name, value]) => ({ name, value, domain: "localhost", path: "/", sameSite: "Lax" })));
+  await page.setCookie(...[...jar].map(([name, value]) => ({ name, value, domain: new URL(APP).hostname, path: "/", sameSite: "Lax" })));
   const go = async (path, view = DESKTOP) => {
     await page.setViewport(view);
     await page.goto(APP + path, { waitUntil: "domcontentloaded", timeout: 120000 });
