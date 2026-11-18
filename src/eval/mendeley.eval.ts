@@ -96,16 +96,27 @@ function metrics(rows: Row[]) {
 
 /**
  * "The more you mark, the more it marks like you", measured without new model calls: for each test student, learn
- * each question's shift from k OTHER test students' teacher marks (every combination), then compare with the teacher.
+ * each question's shift from k OTHER test students' teacher marks (300 seeded random picks), then compare with the teacher.
  */
 function learningCurve(rows: Row[], ks: number[]) {
   const marked = rows.filter((x) => x.teacher !== null) as (Row & { teacher: number })[];
   const students = [...new Set(marked.map((x) => x.student))];
-  const combos = (arr: string[], k: number): string[][] => (k === 0 ? [[]] : arr.flatMap((v, i) => combos(arr.slice(i + 1), k - 1).map((c) => [v, ...c])));
+  // 300 reproducible random subsets of k other students per test student (seeded, so every run gives the same curve)
+  const subsets = (arr: string[], k: number, seed: number): string[][] => {
+    if (k === 0) return [[]];
+    if (k >= arr.length) return [arr];
+    let x = seed >>> 0;
+    const rnd = () => { x = (x + 0x6d2b79f5) >>> 0; let t = Math.imul(x ^ (x >>> 15), 1 | x); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    return Array.from({ length: 300 }, () => {
+      const a = [...arr];
+      for (let i = 0; i < k; i++) { const j = i + Math.floor(rnd() * (a.length - i)); [a[i], a[j]] = [a[j], a[i]]; }
+      return a.slice(0, k);
+    });
+  };
   return ks.filter((k) => k < students.length).map((k) => {
     let within = 0, n = 0, abs = 0;
-    for (const s of students) {
-      for (const pick of combos(students.filter((o) => o !== s), k)) {
+    for (const [si, s] of students.entries()) {
+      for (const pick of subsets(students.filter((o) => o !== s), k, 1000 * k + si)) {
         const chosen = new Set(pick);
         const sh = questionShifts(marked.filter((x) => chosen.has(x.student)).map((x) => ({ q: x.q, ai: x.ai, teacher: x.teacher })));
         for (const x of marked) {
@@ -217,6 +228,10 @@ describe("Mendeley real-data evaluation", () => {
     const last0 = modes[modes.length - 1];
     const beforeGuard = metrics(rows[last0].map((x) => ({ ...x }))).numbers;
     const oldReady = new Set(rows[last0].filter((x) => x.risk === "low").map((x) => `${x.student}:${x.q}`));
+    // Students graded only AFTER the guard and earned approval were frozen (Nov 18): the clean test of those two rules.
+    const cleanIds = new Set(range(process.env.EVAL_CLEAN_STUDENTS, "").map((n) => `Student_${n}`));
+    const isClean = (x: Row) => cleanIds.has(x.student);
+    const cleanBefore = cleanIds.size ? metrics(rows[last0].filter(isClean).map((x) => ({ ...x }))).numbers : null;
     // The guard exactly as the product applies it after learned shifts. It was designed on Nov 17 after seeing these
     // students' results, so its clean test is on students graded after that (listed in the report).
     for (const mode of modes) for (const x of rows[mode]) {
@@ -227,6 +242,14 @@ describe("Mendeley real-data evaluation", () => {
     const studentOrder = [...complete].sort((a, b) => Number(a.split("_")[1]) - Number(b.split("_")[1]));
     const curve = learningCurve(rows["rubric only"], [0, 3, 5, 7, 10]);
     const trustSim = trustSimulation(rows[last0], studentOrder, (x) => oldReady.has(`${x.student}:${x.q}`));
+    const cleanOrder = studentOrder.filter((st) => cleanIds.has(st));
+    const cleanTest = cleanBefore && cleanOrder.length ? {
+      students: cleanOrder,
+      numbers: metrics(rows[last0].filter(isClean)).numbers,
+      before: { flagged: Math.round((1 - (cleanBefore.autoApprovable ?? 0)) * 1000) / 1000, caught: cleanBefore.caught, harshCaught: cleanBefore.harshCaught },
+      earnedTrust: trustSimulation(rows[last0].filter(isClean), cleanOrder, (x) => oldReady.has(`${x.student}:${x.q}`)),
+      learningCurve: learningCurve(rows["rubric only"].filter(isClean), [0, 3, 5, 7]),
+    } : null;
     const m = Object.fromEntries(modes.map((mode) => [mode, metrics(rows[mode])]));
     const keys = Object.keys(m[modes[0]].table);
     const mcqWithTruth = mcqRows.filter((x) => x.truth);
@@ -283,7 +306,8 @@ describe("Mendeley real-data evaluation", () => {
       examplesUsed: exemplars.length,
       modes: Object.fromEntries(modes.map((mode) => [mode, m[mode].numbers])),
       mcq: { lettersRead: mcqWithTruth.length, lettersCorrect: mcqOk },
-      harshGuard: { before: { flagged: Math.round((1 - (beforeGuard.autoApprovable ?? 0)) * 1000) / 1000, errorsCaught: beforeGuard.errorsCaught, harshCaught: beforeGuard.harshCaught }, studentsSeenWhenDesigned: studentOrder },
+      harshGuard: { before: { flagged: Math.round((1 - (beforeGuard.autoApprovable ?? 0)) * 1000) / 1000, errorsCaught: beforeGuard.errorsCaught, harshCaught: beforeGuard.harshCaught }, studentsSeenWhenDesigned: studentOrder.filter((st) => !cleanIds.has(st)) },
+      cleanTest,
       learningCurve: curve,
       earnedTrust: { rule: { minChecked: MIN_CHECKED, minKeptRate: MIN_KEPT_RATE }, ...trustSim },
       teacherConsistency: {

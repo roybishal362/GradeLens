@@ -41,6 +41,7 @@ const ROWS: { label: string; help: string; get: (m: Mode) => string }[] = [
 const curve = summary.learningCurve;
 const trust = summary.earnedTrust;
 const guard = summary.harshGuard;
+const clean = summary.cleanTest;
 
 export default function TransparencyPage() {
   const tc = summary.teacherConsistency;
@@ -51,7 +52,7 @@ export default function TransparencyPage() {
         <h1 className="text-[2.2rem] font-[750] leading-tight tracking-tight">How accurate is GradeLens?</h1>
         <p className="mt-4 text-lg">
           We compared GradeLens with a real teacher&apos;s marks on real handwritten university exams. On {main.n} short answers from{" "}
-          {summary.testStudents} students that were never used to tune it, its suggestion was within half a mark of the teacher&apos;s for{" "}
+          {summary.testStudents} students whose marks it was never given, its suggestion was within half a mark of the teacher&apos;s for{" "}
           <strong>{pct(main.withinHalf)}</strong> of answers (95% interval {pct(lo)} to {pct(hi)}).
         </p>
         <p className="mt-3 text-lg">
@@ -111,8 +112,10 @@ export default function TransparencyPage() {
               <strong>A written answer is never marked 0 without the teacher.</strong> With this rule, flags catch {main.caught} of {main.errors} big
               differences instead of {Math.round((guard.before.errorsCaught ?? 0) * main.errors)}, and {main.harshCaught} of {main.harshErrors} harsh
               ones instead of {guard.before.harshCaught}, at the cost of {pct(1 - main.autoApprovable)} of answers waiting for a look instead
-              of {pct(guard.before.flagged)}. We wrote this rule after seeing these students&apos; results, so it is being re-tested on students it
-              has never seen.
+              of {pct(guard.before.flagged)}. We wrote this rule after seeing {guard.studentsSeenWhenDesigned.length} students&apos; results. On
+              the {clean.students.length} students marked only after it was frozen, flags caught {clean.numbers.caught} of {clean.numbers.errors} big
+              differences (without the rule: {clean.before.caught}) and {clean.numbers.harshCaught} of {clean.numbers.harshErrors} harsh
+              ones (without it: {clean.before.harshCaught}).
             </li>
             <li>
               <strong>Approving marks together has to be earned.</strong> On a written question, the teacher first checks at
@@ -120,8 +123,9 @@ export default function TransparencyPage() {
               them can its ready marks on that question be approved together (the database enforces this). Replaying this evaluation in
               student order: approving every &ldquo;ready&rdquo; mark would have approved {trust.oldButton.approved} of {trust.n} answers
               unseen, {trust.oldButton.wrong} of them more than half a mark off. Earned approval approved {trust.earned.approved},
-              with {trust.earned.wrong} off (with only {summary.testStudents} scripts per question here, few were left after the first checks).
-              Multiple choice is exempt: it is marked by code from the letter read.
+              with {trust.earned.wrong} off ({clean.earnedTrust.earned.approved} approved and {clean.earnedTrust.earned.wrong} off among the
+              students marked after the rule was frozen). These are small numbers, and a real class has more scripts per question: it
+              lowers the risk, it doesn&apos;t remove it. Multiple choice is exempt: it is marked by code from the letter read.
             </li>
           </ol>
         </section>
@@ -157,6 +161,7 @@ export default function TransparencyPage() {
             <li>Data: {summary.dataset.students} university students&apos; handwritten Data Science exams (20 multiple choice + 15 short answers), with the teacher&apos;s mark for every question; {summary.dataset.license}.</li>
             <li>The first {summary.calibrationStudents} students act as the scripts a teacher reviews first: GradeLens marked them, and the teacher&apos;s real marks for them became the examples ({summary.examplesUsed} used) and the learned shifts. The other {summary.testStudents} students were the test.</li>
             <li>Each script: one AI reads the photographed pages (it is given question numbers only, never the questions, so it copies mistakes instead of correcting them); two different AI models mark each answer independently against the mark scheme; plain code checks every quoted piece of evidence, compares the two marks and flags disagreements, unclear handwriting and instructions aimed at the grader.</li>
+            <li>The last {clean.students.length} test students were marked only after the two safety rules above were frozen. On those students alone: {pct(clean.numbers.withinHalf)} within half a mark, kappa {clean.numbers.qwk.toFixed(2)} ({clean.numbers.n} answers).</li>
             <li>The mark scheme was drafted by GradeLens from the dataset&apos;s answer key and reviewed by us before marking (two corrections, recorded with the evaluation).</li>
             <li>Models: free tiers only ({summary.models.join(", ")}). Results vary with which free model answers on a given day.</li>
             <li>Reproducible: the evaluation, its cached model outputs and this page&apos;s numbers come from <code>npm run eval</code> in the GradeLens repository. Generated {new Date(summary.generatedAt).toISOString().slice(0, 10)}.</li>

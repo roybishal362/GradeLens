@@ -53,7 +53,7 @@ export default async function SamplePage() {
             <span className="mt-1 block">Saves your decisions, so you can try releasing results, the gradebook and exports. Needs a free sign-in (a guest one is fine).</span>
           </div>
         </div>
-        <dl className="grid grid-cols-2 content-start gap-px overflow-hidden rounded-md border border-ruling bg-ruling text-center">
+        <dl className="grid grid-cols-2 gap-px self-start overflow-hidden rounded-md border border-ruling bg-ruling text-center">
           {[
             ["Scripts", scripts.length],
             ["Questions", qs.length],

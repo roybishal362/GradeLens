@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { adminDb } from "@/lib/supabase/clients";
 import { testByToken } from "@/lib/uploads";
 import { Uploader } from "./uploader";
+import { byName } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Hand in your answers", robots: { index: false, follow: false } };
 
@@ -45,7 +46,7 @@ async function View({ params }: Pick<PageProps<"/u/[token]">, "params">) {
     <>
       <h1 className="mt-6 text-[1.7rem] font-[750] leading-tight tracking-tight">{test.title}</h1>
       <p className="mt-1 text-muted-foreground">{test.classes.name}</p>
-      <Uploader token={token} students={(students ?? []) as { id: string; display_name: string }[]}
+      <Uploader token={token} students={byName(students as { id: string; display_name: string }[] | null)}
         questions={(t?.rubric.questions ?? []).map((q) => ({ q: q.q, marks: q.marks, mcq: q.type === "mcq" }))} />
     </>
   );

@@ -1,13 +1,13 @@
 /**
  * Earned trust: GradeLens may only approve marks in bulk on a question where it has already matched this teacher.
  *
- * Why: in our evaluation, low-risk marks were still more than half a mark off 27% of the time, and the flags caught
- * only 15% of the big differences. People also fix harsh AI marks less often than the same marks from a colleague
+ * Why: in our evaluation, a quarter of the marks the old rules called "ready" (49 of 198) were more than half a mark off,
+ * and those rules flagged only 14% of the big differences. People also fix harsh AI marks less often than the same marks from a colleague
  * (PNAS Nexus, June 2026). So "approve every ready mark" was a promise the data didn't support.
  *
  * The rule (mirrored in supabase/migrations/0010_earned_trust.sql, bulk_approve): on a written question, the teacher
  * must have checked at least MIN_CHECKED answers one by one, and kept GradeLens' mark on at least MIN_KEPT_RATE of them.
- * Multiple choice is exempt: it's marked by code from the letter read (98.6% of letters read correctly), and an
+ * Multiple choice is exempt: it's marked by code from the letter read (97.8% of letters read correctly), and an
  * unclear letter is flagged, never "ready".
  */
 export const MIN_CHECKED = 5;

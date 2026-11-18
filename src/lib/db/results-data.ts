@@ -3,6 +3,7 @@ import "server-only";
 import { TEST_COLS, type TestRow } from "@/lib/db/types";
 import { gradeFor, percentOf } from "@/lib/results";
 import { userDb } from "@/lib/supabase/clients";
+import { byName } from "@/lib/utils";
 
 export type MarkCell = {
   q: number; max: number; mark: number; ai: number; approved: boolean; note: string | null; flags: string[];
@@ -39,7 +40,7 @@ export async function testMarks(testId: string): Promise<{ test: TestRow; classN
     }]);
   }
   const subByStudent = new Map(((subs ?? []) as Sub[]).map((s) => [s.student_id, s]));
-  const lines: StudentLine[] = (students ?? []).map((st: { id: string; display_name: string; anon_code: string }) => {
+  const lines: StudentLine[] = byName(students as { id: string; display_name: string; anon_code: string }[] | null).map((st) => {
     const s = subByStudent.get(st.id);
     const marked = s && ["graded", "approved"].includes(s.status);
     const pct = marked ? percentOf(s.total, s.max_total) : null;

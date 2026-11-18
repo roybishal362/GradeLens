@@ -5,7 +5,7 @@ import puppeteer from "puppeteer-core";
 
 const [out = "public-check"] = process.argv.slice(2);
 mkdirSync(out, { recursive: true });
-const APP = "http://localhost:3000";
+const APP = process.env.APP_URL ?? "http://localhost:3000";
 const PAGES = [
   { path: "/", must: ["Marking that shows its working", "dataset's own teacher gave", "How it works", "Built around how teachers mark"] },
   { path: "/sample", must: ["Sample class", "Review the scripts", "Marked by the dataset"] },

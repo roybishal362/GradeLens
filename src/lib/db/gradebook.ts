@@ -2,6 +2,7 @@ import "server-only";
 
 import { gradeFor, percentOf } from "@/lib/results";
 import { userDb } from "@/lib/supabase/clients";
+import { byName } from "@/lib/utils";
 
 export type Gradebook = {
   className: string;
@@ -26,7 +27,7 @@ export async function classGradebook(classId: string): Promise<Gradebook | null>
   const key = (t: string, s: string) => `${t}:${s}`;
   const subMap = new Map(((subs ?? []) as Sub[]).map((s) => [key(s.test_id, s.student_id), s]));
   const ts = (tests ?? []) as { id: string; title: string; grade_boundaries: { label: string; min: number }[] | null }[];
-  const rows = (students ?? []).map((st: { id: string; display_name: string; anon_code: string }) => {
+  const rows = byName(students as { id: string; display_name: string; anon_code: string }[] | null).map((st) => {
     const cells = ts.map((t) => {
       const s = subMap.get(key(t.id, st.id));
       const p = s ? percentOf(s.total, s.max_total) : null;

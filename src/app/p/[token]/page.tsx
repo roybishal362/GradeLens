@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { practiceTest } from "@/lib/practice";
 import { adminDb } from "@/lib/supabase/clients";
 import { PracticeForm } from "./practice-form";
+import { byName } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Practice", robots: { index: false, follow: false } };
 
@@ -38,7 +39,7 @@ async function View({ params }: Pick<PageProps<"/p/[token]">, "params">) {
       </p>
       <PracticeForm
         token={token}
-        students={(students ?? []) as { id: string; display_name: string }[]}
+        students={byName(students as { id: string; display_name: string }[] | null)}
         questions={test.rubric.questions.map((q) => ({ q: q.q, text: q.text, marks: q.marks, mcq: q.type === "mcq" }))}
       />
     </>

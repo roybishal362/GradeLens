@@ -149,7 +149,7 @@ async function View({ params }: Pick<PageProps<"/app/tests/[testId]">, "params">
               </p>
               {timing.individual + timing.bulk > 1 && (
                 <p className="mt-2 text-[0.9rem]">
-                  <span className="font-semibold">Your marking time:</span> about {Math.max(1, Math.round(timing.seconds / 60))} minute{Math.round(timing.seconds / 60) === 1 ? "" : "s"} for {timing.individual + timing.bulk} decisions
+                  <span className="font-semibold">Your marking time:</span> {timing.seconds < 60 ? "under a minute" : `about ${Math.round(timing.seconds / 60)} minute${Math.round(timing.seconds / 60) === 1 ? "" : "s"}`} for {timing.individual + timing.bulk} decisions
                   {timing.bulk > 0 && ` (${timing.bulk} approved in bulk)`}{timing.secondsPerMark !== null && `, about ${timing.secondsPerMark} s per mark you checked one by one`}.
                   <span className="text-muted-foreground"> Measured from your decisions; pauses over 2 minutes don&apos;t count.</span>
                 </p>

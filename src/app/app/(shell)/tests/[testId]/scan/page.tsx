@@ -8,6 +8,7 @@ import { uploadLinkFor } from "@/lib/db/teacher";
 import type { StudentRow } from "@/lib/db/types";
 import { userDb } from "@/lib/supabase/clients";
 import { Scanner } from "./scanner";
+import { byName } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Scan a pile of answer sheets" };
 
@@ -39,7 +40,7 @@ async function View({ params }: Pick<PageProps<"/app/tests/[testId]/scan">, "par
         Photograph or scan every page of the <Link href={`/app/tests/${testId}/sheets`} className="font-semibold text-ink underline underline-offset-4">printed answer sheets</Link>,
         in any order, and choose all the photos at once. The QR codes are read on this device; you check the grouping before anything is uploaded.
       </p>
-      <Scanner testId={testId} token={link.url.split("/u/")[1]} students={(students ?? []).map((s) => ({ id: s.id, name: s.display_name, code: s.anon_code }))} />
+      <Scanner testId={testId} token={link.url.split("/u/")[1]} students={byName(students).map((s) => ({ id: s.id, name: s.display_name, code: s.anon_code }))} />
     </>
   );
 }

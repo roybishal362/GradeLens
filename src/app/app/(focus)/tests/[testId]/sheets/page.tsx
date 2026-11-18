@@ -8,6 +8,7 @@ import type { StudentRow } from "@/lib/db/types";
 import { sheetPayload } from "@/lib/sheets";
 import { userDb } from "@/lib/supabase/clients";
 import { PrintButton } from "@/components/print-button";
+import { byName } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Answer sheets" };
 
@@ -30,8 +31,8 @@ async function View({ params, searchParams }: Pick<PageProps<"/app/tests/[testId
   const db = await userDb();
   const { data: test } = await db.from("tests").select("id,class_id,title").eq("id", testId).maybeSingle<{ id: string; class_id: string; title: string }>();
   if (!test) notFound();
-  const { data: students } = await db.from("students").select("id,display_name,anon_code").eq("class_id", test.class_id).order("display_name").returns<StudentRow[]>();
-  const sheets = await Promise.all((students ?? []).flatMap((s) => Array.from({ length: perStudent }, async (_, i) => ({
+  const students = byName((await db.from("students").select("id,display_name,anon_code").eq("class_id", test.class_id).returns<StudentRow[]>()).data);
+  const sheets = await Promise.all(students.flatMap((s) => Array.from({ length: perStudent }, async (_, i) => ({
     key: `${s.id}-${i}`, name: s.display_name, code: s.anon_code, page: i + 1,
     qr: await QRCode.toString(sheetPayload(test.id, s.anon_code, i + 1), { type: "svg", margin: 0, errorCorrectionLevel: "Q" }),
   }))));
@@ -42,7 +43,7 @@ async function View({ params, searchParams }: Pick<PageProps<"/app/tests/[testId
         <p className="text-[0.95rem] text-muted-foreground"><Link href={`/app/tests/${testId}`} className="underline underline-offset-4">{test.title}</Link></p>
         <h1 className="text-[1.95rem] font-[750] tracking-tight">Answer sheets</h1>
         <p className="max-w-2xl text-muted-foreground">
-          Each page has the student&apos;s name and a QR code (it holds their code, {students?.[0]?.anon_code ?? "S01"}, never their name).
+          Each page has the student&apos;s name and a QR code (it holds their code, {students[0]?.anon_code ?? "S01"}, never their name).
           After the test, photograph the whole pile in any order on the <Link href={`/app/tests/${testId}/scan`} className="font-semibold text-ink underline underline-offset-4">scan page</Link>:
           GradeLens sorts the pages to the right students.
         </p>
@@ -56,7 +57,7 @@ async function View({ params, searchParams }: Pick<PageProps<"/app/tests/[testId
           <button className="rounded-md border border-ink/25 bg-white px-4 py-2 font-semibold hover:bg-secondary">Update</button>
           <PrintButton count={sheets.length} />
         </form>
-        {!students?.length && <p className="text-flag">Add students to the class first.</p>}
+        {!students.length && <p className="text-flag">Add students to the class first.</p>}
       </div>
 
       <div className="space-y-8 print:space-y-0">

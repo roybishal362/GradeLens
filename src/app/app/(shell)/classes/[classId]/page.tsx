@@ -9,6 +9,7 @@ import { requireTeacher } from "@/lib/dal";
 import { userDb } from "@/lib/supabase/clients";
 import { DeleteClass } from "./delete-class";
 import { Roster } from "./roster";
+import { byName } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Class" };
 
@@ -106,7 +107,7 @@ async function ClassView({ params, searchParams }: Pick<PageProps<"/app/classes/
         <section aria-labelledby="students-h" className="rounded-lg border border-ruling bg-white p-5">
           <h2 id="students-h" className="text-lg font-semibold">Students</h2>
           <p className="mt-1 text-[0.9rem] text-muted-foreground">The AI only ever sees a code (S01, S02…), never a name.</p>
-          <Roster classId={classId} students={(students ?? []) as { id: string; display_name: string; anon_code: string }[]} />
+          <Roster classId={classId} students={byName(students as { id: string; display_name: string; anon_code: string }[] | null)} />
         </section>
       </div>
       <div className="mt-12 border-t border-ruling pt-6"><DeleteClass classId={classId} name={cls.name} /></div>

@@ -120,7 +120,7 @@ export const BLANK_FLAG = "no answer found: confirm the question was left blank"
 
 /**
  * Harsh marks are the AI errors people most often let through: teachers corrected too-harsh grades less often when
- * they were labelled as AI (PNAS Nexus, June 2026), and 22 of the 39 big differences in our evaluation were the AI
+ * they were labelled as AI (PNAS Nexus, June 2026), and 34 of the 57 big differences in our evaluation were the AI
  * marking lower than the teacher. So a written answer never gets 0 without the teacher's look.
  * Runs AFTER learned shifts (a shift can move a mark to or from 0). Multiple choice is marked by code and exempt.
  */
