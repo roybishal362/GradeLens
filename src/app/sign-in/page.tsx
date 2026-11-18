@@ -1,15 +1,26 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "@/lib/supabase/clients";
 import { signInAsGuest, signInWithGoogle } from "./actions";
 
 export const metadata: Metadata = { title: "Sign in" };
 
 const ERRORS: Record<string, string> = {
   google: "Google sign-in isn't available right now. Try again, or continue as a guest.",
-  guest: "Guest sign-in isn't available right now. Try again in a minute, or continue with Google.",
+  guest: "Guest sign-in isn't available right now. Please try again in a minute.",
   callback: "That sign-in link didn't work (it may have expired). Please try again.",
 };
+
+/** Offer Google only when it is really switched on, so nobody meets a button that fails. */
+async function googleEnabled() {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: SUPABASE_PUBLISHABLE_KEY }, cache: "no-store" });
+    return r.ok && Boolean(((await r.json()) as { external?: { google?: boolean } }).external?.google);
+  } catch {
+    return false;
+  }
+}
 
 export default function SignInPage({ searchParams }: PageProps<"/sign-in">) {
   return (
@@ -34,21 +45,24 @@ async function SignInForms({ searchParams }: { searchParams: PageProps<"/sign-in
   const sp = await searchParams;
   const next = typeof sp.next === "string" ? sp.next : "/app";
   const error = typeof sp.error === "string" ? ERRORS[sp.error] : undefined;
+  const google = await googleEnabled();
   return (
     <div className="mt-8 space-y-6">
       {error && (
         <p role="alert" className="rounded-md border border-flag/40 bg-flag/5 px-4 py-3 text-[0.95rem]">{error}</p>
       )}
-      <form action={signInWithGoogle}>
-        <input type="hidden" name="next" value={next} />
-        <button className="w-full rounded-md bg-redpen px-5 py-3 font-semibold text-white shadow-sm hover:bg-[#b81f1f]">
-          Continue with Google
-        </button>
-      </form>
-      <div className="margin-rule pl-4">
+      {google && (
+        <form action={signInWithGoogle}>
+          <input type="hidden" name="next" value={next} />
+          <button className="w-full rounded-md bg-redpen px-5 py-3 font-semibold text-white shadow-sm hover:bg-[#b81f1f]">
+            Continue with Google
+          </button>
+        </form>
+      )}
+      <div className={google ? "margin-rule pl-4" : ""}>
         <form action={signInAsGuest}>
           <input type="hidden" name="next" value={next} />
-          <button className="w-full rounded-md border border-ink/25 bg-white px-5 py-3 font-semibold hover:bg-secondary">
+          <button className={google ? "w-full rounded-md border border-ink/25 bg-white px-5 py-3 font-semibold hover:bg-secondary" : "w-full rounded-md bg-redpen px-5 py-3 font-semibold text-white shadow-sm hover:bg-[#b81f1f]"}>
             Try it as a guest
           </button>
         </form>

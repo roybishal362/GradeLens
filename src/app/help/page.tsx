@@ -157,7 +157,7 @@ export default function HelpPage() {
                 ["Can students see their marks before I approve them?", "No. Students only see approved marks, and only after you release results."],
                 ["What happens to students' work?", <>Pages are stored privately and sent to AI services to be read and marked, without names. <Link href="/transparency#privacy" className="underline underline-offset-4">Where student work goes</Link>.</>],
                 ["Is it free?", "Yes. It runs on free AI services, so each account has a daily allowance (shown in Settings)."],
-                ["Guest or Google account?", "A guest workspace needs no sign-up but is deleted after 7 days. Sign in with Google to keep your classes."],
+                ["Guest or Google account?", "A guest workspace needs no sign-up but is deleted after 7 days. If the sign-in page offers Google, use it to keep your classes."],
                 ["How do I delete everything?", "Delete a class from the bottom of its page, or your whole account in Settings. Files and marks are deleted permanently."],
               ].map(([q, a]) => (
                 <div key={q as string}>

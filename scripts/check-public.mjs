@@ -12,7 +12,7 @@ const PAGES = [
   { path: "/sample/review", must: ["as read from the page", "The dataset's teacher gave"] },
   { path: "/sample/insights", must: ["What the class misunderstood", "Question by question", "Feedback for each student"] },
   { path: "/transparency", must: ["How accurate is GradeLens?", "Where students' work goes"] },
-  { path: "/sign-in", must: ["Continue with Google", "Try it as a guest"] },
+  { path: "/sign-in", must: ["Try it as a guest"] },
   { path: "/help", must: ["Getting started", "Reviewing marks", "Returning results"] },
 ];
 const views = [

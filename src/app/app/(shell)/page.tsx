@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Your classes" };
 const ERRORS: Record<string, string> = {
   name: "Give the class a name.",
   create: "Couldn't create the class. Try again.",
-  "guest-classes": "Guest workspaces can have up to 3 classes. Sign in with Google for more.",
+  "guest-classes": "Guest workspaces can have up to 3 classes. Delete one to add another.",
 };
 
 export default function Dashboard({ searchParams }: PageProps<"/app">) {
