@@ -48,7 +48,8 @@ export type PracticeFeedback = {
 export async function gradePractice(opts: {
   test: PracticeTest; studentId: string | null; typed?: { q: number; text: string }[]; pages?: { data: Uint8Array; mediaType: string }[];
 }): Promise<{ feedback: PracticeFeedback[]; score: number; max: number }> {
-  const deadline = Date.now() + 240_000;
+  // someone is watching a spinner: typed answers get 90 s, photos (reading + marking) 150 s, then "busy, try again"
+  const deadline = Date.now() + (opts.pages ? 150_000 : 90_000);
   const read = opts.typed ? typedRead(opts.typed) : await readStudent(opts.pages!, opts.test.rubric, { deadline });
   const answered = new Set(read.output.answers.filter((a) => a.text.trim()).map((a) => a.q));
   const rubric: Rubric = { questions: opts.test.rubric.questions.filter((q) => answered.has(q.q)) };

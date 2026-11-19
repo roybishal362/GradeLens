@@ -56,7 +56,7 @@ try {
     if (!ok) throw new Error(`no clickable ${sel} "${text}"`);
   };
   const waitText = (p, text, timeout = 30000) => p.waitForFunction((t) => document.body.innerText.includes(t), { timeout, polling: 500 }, text);
-  const shot = (p, name) => p.screenshot({ path: `${out}/${name}.png`, fullPage: true });
+  const shot = (p, name) => p.screenshot({ path: `${out}/${name}.png`, fullPage: !p.url().includes("/review") }); // the review screen is a fixed-height layout
 
   // 1. class + roster
   await page.goto(`${APP}/app`, { waitUntil: "networkidle0" });
@@ -138,7 +138,9 @@ try {
   if (!/Marked, waiting for you/.test(status)) throw new Error("the script was not marked in time");
 
   // 5. review: evidence + approve
-  await page.goto(`${APP}/app/tests/${testId}/review`, { waitUntil: "networkidle0" });
+  await page.goto(`${APP}/app/tests/${testId}/review`, { waitUntil: "domcontentloaded" });
+  await waitText(page, "Question", 60000);
+  await page.waitForNetworkIdle({ idleTime: 700, concurrency: 2, timeout: 25000 }).catch(() => {});
   await shot(page, "09-review");
   const crit = await page.$("section[aria-label='Marking sheet'] button[aria-pressed]");
   if (crit) { await crit.click(); await new Promise((r) => setTimeout(r, 900)); await shot(page, "10-review-evidence"); }

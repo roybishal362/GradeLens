@@ -9,6 +9,9 @@ import { runGradingJob } from "@/lib/jobs/grade";
 import { checkRubric, draftRubric, mcqRubric, parsePaper, QuestionInputSchema, type QuestionInput } from "@/lib/grading/rubric-agent";
 import { RubricSchema, type Rubric } from "@/lib/grading/schemas";
 import { adminDb, userDb } from "@/lib/supabase/clients";
+
+/** Longest a teacher waits on an AI answer in the mark-scheme screen before seeing "busy, try again". */
+const AI_WAIT_MS = 90_000;
 import { underLimit } from "@/lib/uploads";
 
 // Every action re-checks the session itself (never trusts the page that called it), and writes through the teacher's
@@ -90,11 +93,12 @@ export async function readQuestionPaper(testId: string, paper: string, key: stri
   if (paper.trim().length < 10) return { ok: false, error: "Paste the question paper first." };
   if (!(await underLimit(`ai:text:${t.id}`, t.isGuest ? 15 : 60))) return { ok: false, error: "Today's limit for AI drafting is used up. You can still type the questions in." };
   try {
-    const { questions, missingMarks } = await parsePaper(paper, key);
+    // a teacher waits on this screen: give up after about 90 s with a clear message instead of trying every free model
+    const { questions, missingMarks } = await parsePaper(paper, key, { deadline: Date.now() + AI_WAIT_MS });
     if (!questions.length) return { ok: false, error: "No numbered questions were found. Check the paste, or add questions by hand." };
     return { ok: true, questions, missingMarks };
   } catch {
-    return { ok: false, error: "The free AI models are busy. Try again in a minute, or add questions by hand." };
+    return { ok: false, error: "The free AI is busy right now. Try again in a few minutes, or add the questions by hand." };
   }
 }
 
@@ -116,9 +120,9 @@ export async function draftMarkScheme(testId: string, input: QuestionInput[]): P
   if (open.length) {
     if (!(await underLimit(`ai:text:${t.id}`, t.isGuest ? 15 : 60))) return { ok: false, error: "Today's limit for AI drafting is used up. Try again tomorrow." };
     try {
-      drafted = (await draftRubric(open)).rubric;
+      drafted = (await draftRubric(open, { deadline: Date.now() + AI_WAIT_MS })).rubric;
     } catch {
-      return { ok: false, error: "The free AI models are busy. Try again in a minute." };
+      return { ok: false, error: "The free AI is busy right now. Try again in a few minutes. Nothing you entered was lost." };
     }
   }
   const rubric: Rubric = { questions: [...mcq.map(mcqRubric), ...drafted.questions.filter((r) => open.some((q) => q.q === r.q))].sort((a, b) => a.q - b.q) };
